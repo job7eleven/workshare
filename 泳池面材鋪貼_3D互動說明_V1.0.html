@@ -24,6 +24,12 @@ button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .row:hover{background:var(--chip)}
 .sw{width:14px;height:14px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
 .row .nm{flex:1;line-height:1.3}
+.row.sel{background:var(--chip);box-shadow:inset 3px 0 0 var(--accent)}
+.row.sel .nm{font-weight:700;color:var(--accent)}
+.nb{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;border:1.5px solid var(--warn);color:var(--warn);font-size:10px;font-weight:700;margin-left:3px;cursor:pointer;flex:none;line-height:1}
+.nb.w{background:var(--warn);color:#fff}
+.nbs{display:inline-flex;flex-wrap:wrap;gap:2px;margin-top:3px}
+.note.sel{background:var(--chip);box-shadow:inset 3px 0 0 var(--warn)}
 .row .ct{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12px;text-align:right;white-space:nowrap}
 .grp{font-size:12px;color:var(--muted);margin:10px 0 2px 4px}
 input[type=range]{width:100%}
@@ -54,14 +60,14 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
 <div id="app">
  <aside id="side">
   <h1>泳池面材鋪貼 3D 說明</h1>
-  <div class="sub">Terratech Avorio 透心止滑 30×60×10T／75×75×9.5T｜單位 cm｜V1.1 2026-10-21</div>
+  <div class="sub">Terratech Avorio 透心止滑 30×60×10T／75×75×9.5T｜單位 cm｜V1.2 2026-10-22</div>
   <h2>視角</h2>
   <div class="btns">
    <button data-v="iso">斜視</button><button data-v="top">俯視</button><button data-v="stair">樓梯端</button><button data-v="deep">深水端</button><button data-v="side">側向</button>
   </div>
   <h2>爆炸視圖</h2>
   <input type="range" id="explode" min="0" max="100" value="0">
-  <div class="btns" style="margin-top:8px"><button id="bNotes" class="on">注意事項標記</button><button id="bEdges" class="on">磚縫線</button><button id="bAll">全部顯示</button></div>
+  <div class="btns" style="margin-top:8px"><button id="bNotes" class="on">注意事項標記</button><button id="bEdges" class="on">磚縫線</button><button id="bAll">全部關閉</button></div>
   <h2>分區（點選切換顯示）</h2>
   <div id="zones"></div>
   <h2>數量彙整（30×60 原磚，未含損耗）</h2>
@@ -1171,7 +1177,7 @@ const controls=new THREE.OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true; controls.target.set(0,40,0);
 scene.add(new THREE.HemisphereLight(0xffffff,0x8899aa,0.85));
 const dl=new THREE.DirectionalLight(0xffffff,0.55); dl.position.set(400,900,600); scene.add(dl);
-const grid=new THREE.GridHelper(1600,32,dark?0x333a46:0xd5d9e0,dark?0x262b33:0xe6e9ee); grid.position.y=-1; scene.add(grid);
+const grid=new THREE.GridHelper(1600,32,dark?0x333a46:0xd5d9e0,dark?0x262b33:0xe6e9ee); grid.position.y=-160; grid.material.depthWrite=false; grid.renderOrder=-1; scene.add(grid);
 const V=(x,y,z)=>new THREE.Vector3(x,z,-y); // data (x,y,z up) -> three
 const meshes=[],groups=ZONES.map(()=>new THREE.Group());
 groups.forEach(g=>scene.add(g));
@@ -1232,14 +1238,19 @@ function dirOut(c){ // three coords -> data x,y
  if(Math.abs(x)<=407.5){dy=Math.sign(y)||1;} else { const cx=Math.sign(x)*407.5, cy=Math.max(-30,Math.min(30,y)); dx=x-cx; dy=y-cy; const l=Math.hypot(dx,dy)||1; dx/=l; dy/=l; }
  return new THREE.Vector3(dx,0,-dy);
 }
-function explode(t){
- meshes.forEach(m=>{const k=ZONES[m.userData.z].k; const c=m.userData.c; let o=new THREE.Vector3();
+function offFor(k,c,t){ const o=new THREE.Vector3();
   if(k.startsWith('COP')) o.set(0,90*t,0);
   else if(k==='OUTER') o.copy(dirOut(c)).multiplyScalar(70*t).add(new THREE.Vector3(0,90*t,0));
   else if(k.startsWith('WALL')) o.copy(dirOut(c)).multiplyScalar(110*t);
   else if(k==='STAIR') o.set(0,-20*t,0);
   else o.set(0,-60*t,0);
-  m.position.copy(o);});
+  return o;}
+const NOTE_ZONE={1:'COP_A',2:'COP_B1',3:'OUTER',4:'COP_A',5:'WALL_FLAT',6:'STAIR',7:'FLOOR_Y',8:'FLOOR',9:'WALL_CTR',10:'WALL_FLAT'};
+let explodeT=0;
+function explode(t){ explodeT=t;
+ meshes.forEach(m=>{m.position.copy(offFor(ZONES[m.userData.z].k,m.userData.c,t));});
+ noteSprites.forEach(s=>{const n=s.userData.note; const o=offFor(NOTE_ZONE[n[0]]||'FLOOR',V(...n[3]),t);
+  s.position.copy(s.userData.base).add(o); s.userData.line.position.copy(o);});
 }
 document.getElementById('explode').oninput=e=>explode(e.target.value/100);
 // ---------- views ----------
@@ -1251,10 +1262,16 @@ const cnt=ZONES.map(()=>0),yl=ZONES.map(()=>0);
 DATA.forEach(d=>{cnt[d.z]++;yl[d.z]+=d.y;});
 const zEl=document.getElementById('zones'); let lastG='';
 ZONES.forEach((z,i)=>{ if(z.g!==lastG){const h=document.createElement('div');h.className='grp';h.textContent=z.g;zEl.appendChild(h);lastG=z.g;}
- const r=document.createElement('div');r.className='row';r.innerHTML=`<input type="checkbox" checked><span class="sw" style="background:${z.c}"></span><span class="nm">${z.n}</span><span class="ct">${cnt[i]} 塊／${(Math.round(yl[i]*10)/10)} 片</span>`;
- const cb=r.querySelector('input'); cb.onclick=e=>e.stopPropagation(); cb.onchange=()=>{groups[i].visible=cb.checked;};
- r.onclick=()=>showZone(i); zEl.appendChild(r); z.cb=cb;});
-document.getElementById('bAll').onclick=()=>ZONES.forEach((z,i)=>{z.cb.checked=true;groups[i].visible=true;});
+ const r=document.createElement('div');r.className='row';
+ const nbs=z.nt.map(n=>`<span class="nb${NOTES[n-1][4]?' w':''}" data-n="${n}" title="注意事項 ${n}：${NOTES[n-1][1]}">${n}</span>`).join('');
+ r.innerHTML=`<input type="checkbox" checked><span class="sw" style="background:${z.c}"></span><span class="nm">${z.n}<br><span class="nbs">${nbs}</span></span><span class="ct">${cnt[i]} 塊／${(Math.round(yl[i]*10)/10)} 片</span>`;
+ const cb=r.querySelector('input'); cb.onclick=e=>e.stopPropagation(); cb.onchange=()=>{groups[i].visible=cb.checked;updAll();};
+ r.querySelectorAll('.nb').forEach(b=>b.onclick=e=>{e.stopPropagation();showNote(NOTES[+b.dataset.n-1]);});
+ r.onclick=()=>showZone(i); zEl.appendChild(r); z.cb=cb; z.row=r;});
+const bAll=document.getElementById('bAll');
+function updAll(){const allOn=ZONES.every(z=>z.cb.checked); bAll.textContent=allOn?'全部關閉':'全部顯示'; bAll.classList.toggle('on',!allOn);}
+bAll.onclick=()=>{const allOn=ZONES.every(z=>z.cb.checked); ZONES.forEach((z,i)=>{z.cb.checked=!allOn;groups[i].visible=!allOn;}); if(allOn){info.style.display='none';clearHi();} updAll();};
+
 let notesOn=true; document.getElementById('bNotes').onclick=e=>{notesOn=!notesOn;e.target.classList.toggle('on',notesOn);noteSprites.forEach(s=>{s.visible=notesOn;s.userData.line.visible=notesOn;});};
 let edgesOn=true; document.getElementById('bEdges').onclick=e=>{edgesOn=!edgesOn;e.target.classList.toggle('on',edgesOn);edgesAll.forEach(l=>l.visible=edgesOn);};
 const sum=[['斜頂面','36/2+24+6/2+4','49',[0,1,2,3]],['池底','6×24','144',[10]],['樓梯','6×9','54',[12]],['立面（30×60、收頭、中央）','(27×2+3)×2','114',[5,6,7]],['立面 弧條磚（60 高）','9×2×2+5×2','46',[8]],['20 高條磚＋外側立邊','14+3+17','34',[4,9]]];
@@ -1264,17 +1281,19 @@ html+=`<tr><td><b>30×60 合計</b></td><td></td><td class="n"><b>441</b></td><t
 html+='<tr><td colspan="4" style="color:var(--muted)">原圖 20 高條磚與外側立邊以 3 單元／片保守計；本模型逐塊依取料率折算，差異在損耗緩衝內。建議叫料：30×60 約 475 片、75×75 約 22 片。</td></tr>';
 document.getElementById('sum').innerHTML=html;
 const nEl=document.getElementById('notes');
-NOTES.forEach(n=>{const d=document.createElement('div');d.className='note'+(n[4]?' w':'');d.innerHTML=`<b>${n[0]}</b><div><strong${n[4]?' class="warn"':''}>${n[1]}</strong>　${n[2]}</div>`;d.style.cursor=n[3]?'pointer':'default';d.onclick=()=>showNote(n);nEl.appendChild(d);});
+NOTES.forEach(n=>{const d=document.createElement('div');d.className='note'+(n[4]?' w':'');n.el=d;d.innerHTML=`<b>${n[0]}</b><div><strong${n[4]?' class="warn"':''}>${n[1]}</strong>　${n[2]}</div>`;d.style.cursor=n[3]?'pointer':'default';d.onclick=()=>showNote(n);nEl.appendChild(d);});
 // ---------- info ----------
 const info=document.getElementById('info'),ib=document.getElementById('ib');
 document.getElementById('ic').onclick=()=>{info.style.display='none';clearHi();};
 let hi=null;
-function clearHi(){ if(hi){hi.forEach(m=>m.material=mats[m.userData.z]);hi=null;} }
+function clearSel(){ZONES.forEach(z=>z.row&&z.row.classList.remove('sel'));NOTES.forEach(n=>n.el&&n.el.classList.remove('sel'));}
+function clearHi(){ if(hi){hi.forEach(m=>m.material=mats[m.userData.z]);hi=null;} clearSel(); }
 const hiMat=new THREE.MeshLambertMaterial({color:0xff2d55,side:THREE.DoubleSide,emissive:0x550010});
 function noteLinks(arr){return arr.map(n=>`<span class="warn" style="cursor:pointer" onclick="showNote(NOTES[${n-1}])">${n}</span>`).join('、');}
 function showZone(i,piece){
  const z=ZONES[i]; clearHi();
  hi=piece?[piece]:groups[i].children; hi.forEach(m=>m.material=hiMat);
+ z.row.classList.add('sel'); z.row.scrollIntoView({block:'nearest',behavior:'smooth'});
  ib.innerHTML=`<h3><span class="sw" style="display:inline-block;background:${z.c};vertical-align:-2px;margin-right:6px"></span>${z.n}</h3>`+
  (piece?`<div class="k">編號 ${piece.userData.i}｜成品 ${piece.userData.s}｜折原磚 ${(+piece.userData.y).toFixed(3)} 片</div>`:'')+
  `<table style="margin-top:8px"><tr><th>規格</th><td>${z.spec}</td></tr><tr><th>取料</th><td>${z.take}</td></tr><tr><th>本模型</th><td>${cnt[i]} 塊 → ${yl[i].toFixed(1)} 片</td></tr><tr><th>原圖算式</th><td>${z.orig}</td></tr><tr><th>注意事項</th><td>${noteLinks(z.nt)}</td></tr></table>`;
@@ -1282,8 +1301,8 @@ function showZone(i,piece){
 }
 window.showNote=function(n){
  ib.innerHTML=`<h3 class="${n[4]?'warn':''}">${n[0]}｜${n[1]}</h3><div style="line-height:1.6;margin-top:6px">${n[2]}</div>`+(n[4]?'<div class="warn" style="margin-top:8px;font-size:12px">⚠ 待確認項目</div>':'');
- info.style.display='block'; clearHi();
- if(n[3]){const p=V(...n[3]);controls.target.copy(p);camera.position.copy(p.clone().add(new THREE.Vector3(-260,260,320)));controls.update();}
+ info.style.display='block'; clearHi(); n.el.classList.add('sel'); n.el.scrollIntoView({block:'nearest',behavior:'smooth'});
+ if(n[3]){const p=V(...n[3]).add(offFor(NOTE_ZONE[n[0]]||'FLOOR',V(...n[3]),explodeT));controls.target.copy(p);camera.position.copy(p.clone().add(new THREE.Vector3(-260,260,320)));controls.update();}
 };
 // ---------- picking ----------
 const ray=new THREE.Raycaster(),mouse=new THREE.Vector2(),tip=document.getElementById('tip');
