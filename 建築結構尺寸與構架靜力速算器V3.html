@@ -1,0 +1,2635 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>結構尺寸與靜力速算工具 V3 (RC / SS)</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 3px;
+    }
+    input[type="range"] {
+      accent-color: #3b82f6;
+    }
+    @media print {
+      body {
+        background-color: #ffffff;
+        color: #0f172a;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-card {
+        border: 1px solid #cbd5e1 !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Navigation / Header -->
+  <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-30 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-600/30">
+          Σ
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            建築結構尺寸與構架靜力速算器
+            <span id="badgeStructType" class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">RC 鋼筋混凝土</span>
+          </h1>
+          <p class="text-xs text-slate-400">支援分層材料強度、X/Y 向矩形柱自動配比、直接剛度矩陣 (FEM) 構架分析與 P-M 斷面檢核</p>
+        </div>
+      </div>
+
+      <!-- Quick Presets & Actions -->
+      <div class="flex items-center gap-2 flex-wrap no-print">
+        <span class="text-xs text-slate-400 mr-1 hidden sm:inline">快速範例：</span>
+        <button id="btnPresetDefault" type="button" class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          16F住宅 3×3跨 / 8m
+        </button>
+        <button id="btnPresetOffice" type="button" class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          11F商辦 3×4跨 / 10m×8m
+        </button>
+        <button id="btnPresetFactory" type="button" class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          3F 鋼構廠房 (SS / 10m)
+        </button>
+        <button id="btnCopyReport" type="button" class="text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium shadow transition flex items-center gap-1.5">
+          <span>複製 Markdown 計算書</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Left Control Panel (4 cols on desktop) -->
+    <aside class="lg:col-span-4 space-y-4 no-print">
+
+      <!-- Section 1: 幾何與柱網設定 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+            <span class="w-5 h-5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center justify-center font-bold">1</span>
+            樓層與柱網幾何 (X / Y / Z)
+          </h2>
+          <span id="txtTotalAreaSummary" class="text-xs text-slate-400 font-mono">總面積 -- m²</span>
+        </div>
+
+        <div class="space-y-3.5 text-xs">
+          <!-- Z 樓層數 -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <label for="inpFloors">地上樓層數 (Z)</label>
+              <span id="valFloors" class="font-mono font-semibold text-blue-400">16 樓</span>
+            </div>
+            <input id="inpFloors" type="range" min="1" max="24" step="1" value="16" class="w-full" />
+          </div>
+
+          <!-- 1F 樓高 與 標準層樓高 -->
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <div class="flex justify-between text-slate-300 mb-1">
+                <label for="inpFirstStoryHeight">一層樓高 (H1)</label>
+                <span id="valFirstStoryHeight" class="font-mono font-semibold text-sky-400">4.2 m</span>
+              </div>
+              <input id="inpFirstStoryHeight" type="range" min="2.8" max="7.0" step="0.1" value="4.2" class="w-full" />
+            </div>
+            <div id="wrapStdStoryHeight">
+              <div class="flex justify-between text-slate-300 mb-1">
+                <label for="inpStoryHeight">標準層樓高 (H)</label>
+                <span id="valStoryHeight" class="font-mono font-semibold text-blue-400">3.3 m</span>
+              </div>
+              <input id="inpStoryHeight" type="range" min="2.8" max="6.0" step="0.1" value="3.3" class="w-full" />
+            </div>
+          </div>
+
+          <!-- X 向跨數與跨度 -->
+          <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+            <div>
+              <div class="flex justify-between text-slate-300 mb-1">
+                <label for="inpBaysX">X 向跨數 (Nx)</label>
+                <span id="valBaysX" class="font-mono font-semibold text-emerald-400">3 跨</span>
+              </div>
+              <input id="inpBaysX" type="range" min="1" max="8" step="1" value="3" class="w-full" />
+            </div>
+            <div>
+              <div class="flex justify-between text-slate-300 mb-1">
+                <label for="inpSpanX">X 向柱距 (Lx)</label>
+                <span id="valSpanX" class="font-mono font-semibold text-emerald-400">8.0 m</span>
+              </div>
+              <input id="inpSpanX" type="range" min="4.0" max="14.0" step="0.5" value="8.0" class="w-full" />
+            </div>
+          </div>
+
+          <!-- Y 向跨數與跨度 -->
+          <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+            <div>
+              <div class="flex justify-between text-slate-300 mb-1">
+                <label for="inpBaysY">Y 向跨數 (Ny)</label>
+                <span id="valBaysY" class="font-mono font-semibold text-amber-400">3 跨</span>
+              </div>
+              <input id="inpBaysY" type="range" min="1" max="8" step="1" value="3" class="w-full" />
+            </div>
+            <div>
+              <div class="flex justify-between text-slate-300 mb-1">
+                <label for="inpSpanY">Y 向柱距 (Ly)</label>
+                <span id="valSpanY" class="font-mono font-semibold text-amber-400">8.0 m</span>
+              </div>
+              <input id="inpSpanY" type="range" min="4.0" max="14.0" step="0.5" value="8.0" class="w-full" />
+            </div>
+          </div>
+
+          <!-- 柱斷面長寬形狀與次梁配置 -->
+          <div class="pt-2 border-t border-slate-800/80 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <label for="selColAspect" class="text-slate-300">柱斷面形狀 (Bx × Dy)</label>
+              <select id="selColAspect" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-blue-500">
+                <option value="rect_auto" selected>依 X/Y 跨度與彎矩自動矩形柱</option>
+                <option value="square">固定正方形柱 (Bx = Dy)</option>
+                <option value="rect_custom">自訂矩形長寬比 (Bx : Dy)</option>
+              </select>
+            </div>
+
+            <div id="wrapCustomColRatio" class="hidden bg-slate-950/80 border border-slate-800 rounded-lg p-2.5">
+              <div class="flex justify-between text-slate-300 mb-1">
+                <label for="inpColRatioXY">自訂柱深比 (Bx / Dy)</label>
+                <span id="valColRatioXY" class="font-mono font-semibold text-emerald-400">1.25 (X向加寬)</span>
+              </div>
+              <input id="inpColRatioXY" type="range" min="0.60" max="1.60" step="0.05" value="1.25" class="w-full" />
+            </div>
+
+            <div class="flex items-center justify-between">
+              <label for="selSubBeam" class="text-slate-300">每跨小梁分割數</label>
+              <select id="selSubBeam" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-blue-500">
+                <option value="1">不設小梁 (雙向版)</option>
+                <option value="2" selected>中間 1 支小梁 (2 等分)</option>
+                <option value="3">中間 2 支小梁 (3 等分)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: 結構形式與分層材料規格 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+            <span class="w-5 h-5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center justify-center font-bold">2</span>
+            結構形式與分層材料規格
+          </h2>
+          <button id="btnAddZone" type="button" title="新增高樓層分段材料規格" class="text-xs px-2.5 py-1 rounded-md bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/40 font-semibold transition flex items-center gap-1">
+            <span>＋ 分段材料</span>
+          </button>
+        </div>
+
+        <!-- Toggle RC / SS (全棟統一) -->
+        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-lg border border-slate-800 mb-3">
+          <button id="btnModeRC" type="button" class="py-2 px-3 rounded-md text-xs font-semibold transition bg-blue-600 text-white shadow">
+            RC 鋼筋混凝土
+          </button>
+          <button id="btnModeSS" type="button" class="py-2 px-3 rounded-md text-xs font-semibold transition text-slate-400 hover:text-white">
+            SS 鋼骨結構
+          </button>
+        </div>
+
+        <!-- SS 柱斷面型式選擇 (全棟統一) -->
+        <div id="panelSSColType" class="mb-3 text-xs hidden">
+          <div class="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded-lg px-2.5 py-1.5">
+            <label for="selColShape" class="text-slate-300">全棟鋼柱斷面型式</label>
+            <select id="selColShape" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200">
+              <option value="BOX" selected>BOX 箱型柱 (支援正方形/矩形)</option>
+              <option value="H">H 型鋼柱 (強弱軸分明)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 動態樓層分段材料列表 -->
+        <div id="zonesContainer" class="space-y-2.5 text-xs"></div>
+
+        <!-- Default hidden selects kept for backward compatibility with ID checks -->
+        <div class="hidden">
+          <div id="panelMaterialRC">
+            <select id="selFc"><option value="280" selected>280</option></select>
+            <select id="selFy"><option value="4200" selected>4200</option></select>
+          </div>
+          <div id="panelMaterialSS">
+            <select id="selSteelGrade"><option value="3300" selected>3300</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: 載重條件與耐震強度 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+        <h2 class="text-sm font-semibold text-white flex items-center gap-2 mb-3">
+          <span class="w-5 h-5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center justify-center font-bold">3</span>
+          用途載重與耐震強度設定
+        </h2>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label for="selOccupancy" class="block text-slate-300 mb-1">建築物用途預設 (自動帶入活載重 LL)</label>
+            <select id="selOccupancy" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200">
+              <option value="residential" selected>一般住宅 / 集合住宅 (LL = 200 kgf/m²)</option>
+              <option value="office">一般辦公室 / 教室 (LL = 300 kgf/m²)</option>
+              <option value="retail">商場 / 餐廳 / 展示空間 (LL = 400 kgf/m²)</option>
+              <option value="factory_light">輕工業廠房 / 實驗室 (LL = 500 kgf/m²)</option>
+              <option value="storage_heavy">重型倉儲 / 機房設備層 (LL = 800 kgf/m²)</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="inpSDL" class="block text-slate-300 mb-1">附加靜載 SDL (kgf/m²)</label>
+              <input id="inpSDL" type="number" min="50" max="600" step="10" value="150" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 font-mono" />
+              <span class="text-[11px] text-slate-400">含粉刷、隔間、管線</span>
+            </div>
+            <div>
+              <label for="inpLL" class="block text-slate-300 mb-1">活載重 LL (kgf/m²)</label>
+              <input id="inpLL" type="number" min="100" max="1500" step="25" value="200" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 font-mono" />
+              <span class="text-[11px] text-slate-400">可手動微調活載重</span>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-800/80 space-y-2">
+            <div class="flex justify-between text-slate-300">
+              <label for="selSeismic">耐震快速選單 (SDS / SD1 概略值，請以 NCREE 覆核)</label>
+            </div>
+            <select id="selSeismic" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200">
+              <option value="0.50|0.30">弱震區 (SDS 0.50 / SD1 0.30)</option>
+              <option value="0.60|0.78">臺北盆地二區 (SDS 0.60 / SD1 0.78，T0D 1.30s)</option>
+              <option value="0.60|0.63">臺北盆地三區 (SDS 0.60 / SD1 0.63，T0D 1.05s)</option>
+              <option value="0.70|0.45" selected>一般中強震區 (SDS 0.70 / SD1 0.45)</option>
+              <option value="0.80|0.50">強震區 (SDS 0.80 / SD1 0.50)</option>
+            </select>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex items-center justify-between gap-1 bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-1.5">
+                <label for="inpSdsExact" class="text-slate-300">SDS (g)</label>
+                <input id="inpSdsExact" type="number" min="0.20" max="1.50" step="0.01" value="0.70" class="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-right font-mono text-amber-300" />
+              </div>
+              <div class="flex items-center justify-between gap-1 bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-1.5">
+                <label for="inpSd1Exact" class="text-slate-300">SD1 (g)</label>
+                <input id="inpSd1Exact" type="number" min="0.10" max="1.50" step="0.01" value="0.45" class="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-right font-mono text-amber-300" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label for="selImportance" class="block text-[11px] text-slate-400 mb-0.5">用途係數 I</label>
+                <select id="selImportance" class="w-full bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-slate-200 font-mono">
+                  <option value="1.0" selected>1.0 一般</option>
+                  <option value="1.25">1.25 第三類</option>
+                  <option value="1.5">1.5 第一/二類</option>
+                </select>
+              </div>
+              <div>
+                <label for="inpRsys" class="block text-[11px] text-slate-400 mb-0.5">韌性容量 R</label>
+                <input id="inpRsys" type="number" min="1.0" max="8.0" step="0.1" value="4.8" class="w-full bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-right font-mono text-slate-100" />
+              </div>
+              <div>
+                <label for="inpAlphaY" class="block text-[11px] text-slate-400 mb-0.5">αy</label>
+                <input id="inpAlphaY" type="number" min="1.0" max="2.0" step="0.05" value="1.0" class="w-full bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-right font-mono text-slate-100" />
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-500 leading-snug">R = 4.8：特殊抗彎矩構架；αy = 1.0：地震力載重因子取 1.0 之強度設計</div>
+
+            <div class="bg-blue-950/40 border border-blue-500/30 rounded-lg p-2.5 flex items-center justify-between gap-2">
+              <div class="text-[11px] text-slate-300 leading-snug">
+                <div class="font-semibold text-blue-300">國家地震工程研究中心 (NCREE)</div>
+                <div>查詢基地微分區與近斷層參數 SDS、SD1</div>
+              </div>
+              <a href="https://seaport.ncree.org/sederes/" target="_blank" rel="noopener noreferrer" class="shrink-0 text-xs px-2.5 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium transition shadow">
+                開啟查詢 ↗
+              </a>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
+              <span>設計基底剪力係數：</span>
+              <span id="txtSeismicBaseCoeff" class="font-mono text-amber-300">V = 0.140 W</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Right Output & Visualization Area (8 cols on desktop) -->
+    <section class="lg:col-span-8 space-y-5">
+
+      <!-- Top Summary KPI Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 print-card">
+          <div class="text-xs text-slate-400 mb-1">1F 內柱建議尺寸 (Bx×Dy)</div>
+          <div id="kpiColSize" class="text-lg sm:text-xl font-bold font-mono text-blue-400">90 × 90 cm</div>
+          <div id="kpiColSub" class="text-[11px] text-slate-400 mt-0.5">受荷 64.0 m² · 軸力比 0.28</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 print-card">
+          <div class="text-xs text-slate-400 mb-1">X / Y 主大梁建議</div>
+          <div id="kpiGirderSize" class="text-base sm:text-lg font-bold font-mono text-emerald-400">45×75 / 45×75</div>
+          <div id="kpiGirderSub" class="text-[11px] text-slate-400 mt-0.5">跨度 Lx=8.0m / Ly=8.0m</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 print-card">
+          <div class="text-xs text-slate-400 mb-1">次小梁 / 樓板厚度</div>
+          <div id="kpiSubBeamSlab" class="text-lg sm:text-xl font-bold font-mono text-amber-400">30×55 / 15cm</div>
+          <div id="kpiSubBeamSub" class="text-[11px] text-slate-400 mt-0.5">極限設計載重 wu = 875 kgf/m²</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 print-card">
+          <div class="text-xs text-slate-400 mb-1">基底總地震剪力 V</div>
+          <div id="kpiBaseShear" class="text-lg sm:text-xl font-bold font-mono text-rose-400">1280 tf</div>
+          <div id="kpiTotalWeight" class="text-[11px] text-slate-400 mt-0.5">結構總重 W = 9140 tf</div>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs for Engineering Views -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm print-card">
+        <div class="border-b border-slate-800 px-3 pt-2 flex flex-wrap gap-1 no-print bg-slate-950/50">
+          <button type="button" data-tab="sizing" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-blue-500 text-blue-400 bg-slate-900">
+            1. 結構平面與分層斷面尺寸表
+          </button>
+          <button type="button" data-tab="fem" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+            2. 2D 構架有限元素內力圖 (FEM)
+          </button>
+          <button type="button" data-tab="pm" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+            3. 1F 柱 P-M 軸力彎矩包絡線檢核
+          </button>
+          <button type="button" data-tab="calc" class="tab-btn px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-slate-200">
+            4. 工程計算書與數量概估 (Handcalcs)
+          </button>
+        </div>
+
+        <!-- TAB 1: Plan & Sizing Table -->
+        <div id="tab-sizing" class="tab-panel p-4 space-y-5">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+            <!-- Plan Canvas -->
+            <div class="md:col-span-7 bg-slate-950 border border-slate-800 rounded-lg p-3 flex flex-col items-center">
+              <div class="w-full flex items-center justify-between text-xs text-slate-400 mb-2">
+                <span class="font-medium text-slate-200">標準層結構柱位與矩形柱方向示意圖</span>
+                <span class="flex items-center gap-2 text-[11px]">
+                  <span class="inline-flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block"></i>內柱 C1</span>
+                  <span class="inline-flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block"></i>邊柱 C2</span>
+                  <span class="inline-flex items-center gap-1"><i class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></i>角柱 C3</span>
+                </span>
+              </div>
+              <div class="w-full relative h-64 sm:h-72">
+                <canvas id="canvasPlan" class="w-full h-full block"></canvas>
+              </div>
+            </div>
+
+            <!-- 3D Wireframe / Elevation Summary & BoQ -->
+            <div class="md:col-span-5 space-y-3">
+              <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+                <div class="text-xs font-medium text-slate-200 mb-2">3D 構架透視與造價指標概估</div>
+                <div class="w-full relative h-36 mb-2">
+                  <canvas id="canvas3D" class="w-full h-full block"></canvas>
+                </div>
+                <div class="space-y-1.5 text-xs border-t border-slate-800 pt-2">
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">總樓地板面積 (GFA)：</span>
+                    <span id="boqGFA" class="font-mono font-semibold text-white">-- m²</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400">混凝土單位用量指標：</span>
+                    <span id="boqConcreteUnit" class="font-mono text-emerald-400">-- m³/m²</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-slate-400" id="lblSteelUnit">鋼筋單位用量指標：</span>
+                    <span id="boqSteelUnit" class="font-mono text-amber-400">-- kgf/m²</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detailed Member Sizing Table -->
+          <div>
+            <div class="flex items-center justify-between mb-2 flex-wrap gap-1">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">構件尺寸概估一覽表 (依位置、1F 樓高與分段材料自動展列)</h3>
+              <span id="txtCodeBasis" class="text-[11px] text-slate-400">柱斷面格式：Bx (X向寬) × Dy (Y向深)</span>
+            </div>
+            <div class="overflow-x-auto border border-slate-800 rounded-lg">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-950 text-slate-300 border-b border-slate-800">
+                    <th class="py-2.5 px-3 font-semibold">構件編號與樓層區段</th>
+                    <th class="py-2.5 px-3 font-semibold">材料規格 / 樓高</th>
+                    <th class="py-2.5 px-3 font-semibold">設計控制內力 (Pu / Mu)</th>
+                    <th class="py-2.5 px-3 font-semibold">建議結構斷面尺寸 (Bx×Dy)</th>
+                    <th class="py-2.5 px-3 font-semibold">經驗公式與檢核指標</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyMembers" class="divide-y divide-slate-800/70 text-slate-200 font-mono">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: 2D Frame Matrix Stiffness Analysis (PyNite / anaStruct Equivalent) -->
+        <div id="tab-fem" class="tab-panel p-4 space-y-4 hidden">
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800">
+            <div>
+              <h3 class="text-xs font-semibold text-white">2D 剛架直接剛度矩陣分析 (Direct Stiffness Method / 含 1F 挑高與分層剛度)</h3>
+              <p class="text-[11px] text-slate-400">自動代入 1F 樓高 <span class="font-mono text-sky-300">H1</span>、標準層高 <span class="font-mono text-blue-300">H</span> 與各分段柱梁慣性矩解算 <span class="font-mono text-blue-300">[K]{u} = {F}</span></p>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <label for="selFemDir" class="text-slate-300">分析構架方向：</label>
+              <select id="selFemDir" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200">
+                <option value="X" selected>X 向內構架 (檢核柱寬 Bx 與 Gx 大梁)</option>
+                <option value="Y">Y 向內構架 (檢核柱深 Dy 與 Gy 大梁)</option>
+              </select>
+              <label for="selFemDiagram" class="text-slate-300 ml-1">顯示圖形：</label>
+              <select id="selFemDiagram" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200">
+                <option value="BMD" selected>彎矩圖 BMD (tf·m)</option>
+                <option value="AFD">柱軸力圖 AFD (tf)</option>
+                <option value="DEF">側向變位與層間位移角</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="w-full relative h-80 bg-slate-950 border border-slate-800 rounded-lg p-3">
+            <canvas id="canvasFEM" class="w-full h-full block"></canvas>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+              <div class="text-slate-400 mb-1">構架梁端最大負彎矩 M_max</div>
+              <div id="femMaxMoment" class="text-base font-bold font-mono text-amber-400">-- tf·m</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">載重組合：1.2D + 1.0L + 1.0E</div>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+              <div class="text-slate-400 mb-1">1F 內柱最大組合軸力 P_max</div>
+              <div id="femMaxAxial" class="text-base font-bold font-mono text-rose-400">-- tf</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">含重力軸力與地震傾覆軸力</div>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+              <div class="text-slate-400 mb-1">最大層間位移角 Drift Ratio</div>
+              <div id="femMaxDrift" class="text-base font-bold font-mono text-emerald-400">-- ‰</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">規範容許上限：5.0 ‰ (0.005 rad)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: P-M Interaction Diagram -->
+        <div id="tab-pm" class="tab-panel p-4 space-y-4 hidden">
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800">
+            <div>
+              <h3 class="text-xs font-semibold text-white">1F 內柱斷面軸力－彎矩互制包絡線 (P-M Interaction Diagram)</h3>
+              <p class="text-[11px] text-slate-400">依目前所選構架方向 (<span id="txtPmDirLabel" class="text-blue-300 font-mono">X向彎矩 Mx</span>) 檢核 1F 矩形/正方形柱斷面極限強度</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+              <label for="inpRebarRatio" class="text-slate-300">柱主筋配筋率 ρg：</label>
+              <select id="inpRebarRatio" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono">
+                <option value="0.015">1.5% (經濟配筋)</option>
+                <option value="0.020" selected>2.0% (標準配筋)</option>
+                <option value="0.025">2.5% (高軸力/強震)</option>
+                <option value="0.030">3.0% (密集配筋)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+            <div class="md:col-span-8 relative h-72 bg-slate-950 border border-slate-800 rounded-lg p-3">
+              <canvas id="canvasPM" class="w-full h-full block"></canvas>
+            </div>
+            <div class="md:col-span-4 space-y-2.5 text-xs bg-slate-950 border border-slate-800 rounded-lg p-3.5">
+              <div class="font-semibold text-white border-b border-slate-800 pb-1.5">1F 內柱斷面極限強度檢核摘要</div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">純軸壓設計強度 φPn,max：</span>
+                <span id="pmPhiPnMax" class="font-mono text-blue-400">-- tf</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">平衡點強度 (φPb, φMb)：</span>
+                <span id="pmBalanced" class="font-mono text-emerald-400">-- tf / -- tf·m</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">純彎矩設計強度 φMn,0：</span>
+                <span id="pmPhiMn0" class="font-mono text-amber-400">-- tf·m</span>
+              </div>
+              <div class="border-t border-slate-800 pt-2 space-y-1.5">
+                <div class="flex justify-between">
+                  <span class="text-slate-300">1F 內柱需求 (Pu, Mu)：</span>
+                  <span id="pmDemandC1" class="font-mono text-rose-400">--</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-300">斷面安全餘裕比 (D/C Ratio)：</span>
+                  <span id="pmDCRatio" class="font-mono font-bold text-emerald-400">-- (OK)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: Handcalcs Step-by-Step Report -->
+        <div id="tab-calc" class="tab-panel p-4 space-y-3 hidden">
+          <div class="flex items-center justify-between bg-slate-950 p-3 rounded-lg border border-slate-800">
+            <div>
+              <h3 class="text-xs font-semibold text-white">結構速算步驟與公式推導計算書 (Handcalcs Style)</h3>
+              <p class="text-[11px] text-slate-400">完整列出分層材料規格、1F/標準層高度、矩形柱配比與單位換算</p>
+            </div>
+            <button id="btnCopyCalcInner" type="button" class="text-xs px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 transition">
+              複製計算書全文
+            </button>
+          </div>
+          <pre id="preHandcalcs" class="bg-slate-950 border border-slate-800 rounded-lg p-4 text-xs font-mono text-slate-200 overflow-x-auto leading-relaxed custom-scrollbar max-h-96"></pre>
+        </div>
+
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toastMsg" class="fixed bottom-5 right-5 bg-emerald-600 text-white text-xs font-medium px-4 py-2.5 rounded-lg shadow-xl transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none z-50">
+    已複製計算書至剪貼簿！
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. 型鋼斷面資料庫與設計常數
+    // =========================================================================
+    const STEEL_H_SECTIONS = [
+      { name: "RH 250×125×6×9", d: 250, b: 125, tw: 6, tf: 9, weight: 29.6, Ix: 4050, Zx: 356 },
+      { name: "RH 300×150×6.5×9", d: 300, b: 150, tw: 6.5, tf: 9, weight: 36.7, Ix: 7210, Zx: 528 },
+      { name: "RH 350×175×7×11", d: 350, b: 175, tw: 7, tf: 11, weight: 49.6, Ix: 13600, Zx: 841 },
+      { name: "RH 400×200×8×13", d: 400, b: 200, tw: 8, tf: 13, weight: 66.0, Ix: 23700, Zx: 1290 },
+      { name: "RH 450×200×9×14", d: 450, b: 200, tw: 9, tf: 14, weight: 76.0, Ix: 33500, Zx: 1620 },
+      { name: "RH 500×200×10×16", d: 500, b: 200, tw: 10, tf: 16, weight: 89.6, Ix: 47800, Zx: 2090 },
+      { name: "RH 600×200×11×17", d: 600, b: 200, tw: 11, tf: 17, weight: 106.0, Ix: 77600, Zx: 2840 },
+      { name: "RH 700×300×13×24", d: 700, b: 300, tw: 13, tf: 24, weight: 185.0, Ix: 201000, Zx: 6270 },
+      { name: "BH 800×300×14×26", d: 800, b: 300, tw: 14, tf: 26, weight: 210.0, Ix: 292000, Zx: 7980 },
+      { name: "BH 900×300×16×28", d: 900, b: 300, tw: 16, tf: 28, weight: 243.0, Ix: 411000, Zx: 10050 },
+      { name: "BH 1000×350×19×32", d: 1000, b: 350, tw: 19, tf: 32, weight: 306.0, Ix: 662000, Zx: 14500 }
+    ];
+    STEEL_H_SECTIONS.forEach(s => { s.A = +(s.weight / 0.785).toFixed(1); }); // 斷面積 cm²
+
+    const OCCUPANCY_LL = {
+      residential: 200,
+      office: 300,
+      retail: 400,
+      factory_light: 500,
+      storage_heavy: 800
+    };
+
+    const E_STEEL = 2.04e6;          // kgf/cm²
+    const DRIFT_LIMIT = 0.005;       // 層間位移角上限 (設計地震力作用下)
+    const RHO_BEAM_DESIGN = 0.0125;  // 梁拉力筋上限配筋率 (概估取 ρmax 約一半，避免鋼筋擁擠)
+    const RY_STEEL = 1.1;            // 鋼材預期降伏強度比
+    const MAX_DESIGN_ITER = 30;
+
+    // App State (Default: 16F 住宅 3x3跨 / 8m，含 3 段分層材料範例)
+    const state = {
+      floors: 16,
+      firstStoryHeight: 4.2,
+      storyHeight: 3.3,
+      baysX: 3,
+      spanX: 8.0,
+      baysY: 3,
+      spanY: 8.0,
+      colAspectMode: 'rect_auto', // 'rect_auto' | 'square' | 'rect_custom'
+      customColRatio: 1.25,
+      subBeamDiv: 2,
+      structType: 'RC', // 'RC' or 'SS'
+      colShape: 'BOX',
+      materialZones: [
+        { startFloor: 1, fc: 420, fy: 4200, steelFy: 3300 },
+        { startFloor: 6, fc: 350, fy: 4200, steelFy: 3300 },
+        { startFloor: 12, fc: 280, fy: 4200, steelFy: 2500 }
+      ],
+      occupancy: 'residential',
+      sdl: 150,
+      ll: 200,
+      sds: 0.70,
+      sd1: 0.45,
+      importanceI: 1.0,
+      Rsys: 4.8,
+      alphaY: 1.0,
+      rebarRatio: 0.020,
+      activeTab: 'sizing',
+      femDir: 'X',
+      femDiagram: 'BMD',
+      lastResult: null
+    };
+
+    function roundUp5(val) {
+      return Math.ceil(val / 5) * 5;
+    }
+
+    function roundUp50mm(val) {
+      return Math.ceil(val / 50) * 50;
+    }
+
+    // 確保分層材料規格隨總樓層數 Z 自動正規化
+    function normalizeMaterialZones() {
+      const Z = state.floors;
+      state.materialZones[0].startFloor = 1;
+      // 移除起始樓層超過 Z 的區段
+      state.materialZones = state.materialZones.filter((z, idx) => idx === 0 || z.startFloor <= Z);
+      // 確保嚴格遞增
+      for (let i = 1; i < state.materialZones.length; i++) {
+        const minStart = state.materialZones[i - 1].startFloor + 1;
+        if (state.materialZones[i].startFloor < minStart) {
+          state.materialZones[i].startFloor = minStart;
+        }
+        if (state.materialZones[i].startFloor > Z) {
+          state.materialZones.splice(i);
+          break;
+        }
+      }
+      // 計算每個區段的 endFloor
+      for (let i = 0; i < state.materialZones.length; i++) {
+        const nextStart = i + 1 < state.materialZones.length ? state.materialZones[i + 1].startFloor : Z + 1;
+        state.materialZones[i].endFloor = Math.min(Z, nextStart - 1);
+      }
+    }
+
+    function getZoneForFloor(fl) {
+      for (let i = state.materialZones.length - 1; i >= 0; i--) {
+        if (fl >= state.materialZones[i].startFloor) {
+          return state.materialZones[i];
+        }
+      }
+      return state.materialZones[0];
+    }
+
+    function getStoryHeight(fl) {
+      return fl === 1 ? state.firstStoryHeight : state.storyHeight;
+    }
+
+    function getTotalBuildingHeight() {
+      if (state.floors <= 1) return state.firstStoryHeight;
+      return state.firstStoryHeight + (state.floors - 1) * state.storyHeight;
+    }
+
+    // =========================================================================
+    // 2. 動態渲染「分層材料規格」控制面板
+    // =========================================================================
+    function renderMaterialZonesUI() {
+      normalizeMaterialZones();
+      const container = document.getElementById('zonesContainer');
+      const btnAdd = document.getElementById('btnAddZone');
+      const Z = state.floors;
+
+      // 當 Z <= 1 或區段已塞滿每一層時禁用 [+] 按鈕
+      const lastZone = state.materialZones[state.materialZones.length - 1];
+      const canAdd = Z >= 2 && lastZone.startFloor < Z;
+      btnAdd.disabled = !canAdd;
+      btnAdd.className = canAdd
+        ? 'text-xs px-2.5 py-1 rounded-md bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/40 font-semibold transition flex items-center gap-1 cursor-pointer'
+        : 'text-xs px-2.5 py-1 rounded-md bg-slate-800 text-slate-500 border border-slate-700 font-semibold flex items-center gap-1 opacity-50 cursor-not-allowed';
+
+      container.innerHTML = state.materialZones.map((zone, idx) => {
+        const rangeLabel = zone.startFloor === zone.endFloor
+          ? `${zone.startFloor}F`
+          : `${zone.startFloor}F ~ ${zone.endFloor}F`;
+
+        const minStart = idx === 0 ? 1 : state.materialZones[idx - 1].startFloor + 1;
+        const maxStart = idx + 1 < state.materialZones.length ? state.materialZones[idx + 1].startFloor - 1 : Z;
+
+        let startFloorControl = '';
+        if (idx > 0) {
+          let opts = '';
+          for (let f = minStart; f <= maxStart; f++) {
+            opts += `<option value="${f}" ${f === zone.startFloor ? 'selected' : ''}>${f}F 起</option>`;
+          }
+          startFloorControl = `
+            <div class="flex items-center gap-1.5">
+              <span class="text-[11px] text-slate-400">起始層:</span>
+              <select data-zone-start="${idx}" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-blue-300 font-mono text-xs">
+                ${opts}
+              </select>
+              <button type="button" data-zone-remove="${idx}" title="刪除此分段" class="text-rose-400 hover:text-rose-300 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-[11px]">
+                ✕
+              </button>
+            </div>
+          `;
+        } else {
+          startFloorControl = `<span class="text-[11px] text-slate-400 font-mono">基礎底層段</span>`;
+        }
+
+        const matFields = state.structType === 'RC'
+          ? `
+            <div class="grid grid-cols-2 gap-2 mt-2">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-0.5">混凝土 f'c (kgf/cm²)</label>
+                <select data-zone-fc="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono">
+                  <option value="210" ${zone.fc === 210 ? 'selected' : ''}>210 (3000 psi)</option>
+                  <option value="280" ${zone.fc === 280 ? 'selected' : ''}>280 (4000 psi)</option>
+                  <option value="350" ${zone.fc === 350 ? 'selected' : ''}>350 (5000 psi)</option>
+                  <option value="420" ${zone.fc === 420 ? 'selected' : ''}>420 (6000 psi)</option>
+                  <option value="490" ${zone.fc === 490 ? 'selected' : ''}>490 (7000 psi)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-0.5">鋼筋 fy (kgf/cm²)</label>
+                <select data-zone-fy="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono">
+                  <option value="4200" ${zone.fy === 4200 ? 'selected' : ''}>SD420W (4200)</option>
+                  <option value="4900" ${zone.fy === 4900 ? 'selected' : ''}>SD490 (4900)</option>
+                </select>
+              </div>
+            </div>
+          `
+          : `
+            <div class="mt-2">
+              <label class="block text-[11px] text-slate-400 mb-0.5">結構鋼材降伏強度 Fy (kgf/cm²)</label>
+              <select data-zone-steelfy="${idx}" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono">
+                <option value="2500" ${zone.steelFy === 2500 ? 'selected' : ''}>SN400B / A36 (Fy = 2500)</option>
+                <option value="3300" ${zone.steelFy === 3300 ? 'selected' : ''}>SN490B / Gr.50 (Fy = 3300)</option>
+                <option value="3600" ${zone.steelFy === 3600 ? 'selected' : ''}>SM570M (Fy = 3600)</option>
+              </select>
+            </div>
+          `;
+
+        return `
+          <div class="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+              <span class="font-semibold text-amber-300 font-mono">區段 ${idx + 1}：${rangeLabel}</span>
+              ${startFloorControl}
+            </div>
+            ${matFields}
+          </div>
+        `;
+      }).join('');
+
+      // 綁定動態區段事件
+      container.querySelectorAll('[data-zone-start]').forEach(sel => {
+        sel.addEventListener('change', e => {
+          const i = parseInt(sel.getAttribute('data-zone-start'), 10);
+          state.materialZones[i].startFloor = parseInt(e.target.value, 10);
+          renderMaterialZonesUI();
+          renderAll();
+        });
+      });
+
+      container.querySelectorAll('[data-zone-remove]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const i = parseInt(btn.getAttribute('data-zone-remove'), 10);
+          state.materialZones.splice(i, 1);
+          renderMaterialZonesUI();
+          renderAll();
+        });
+      });
+
+      container.querySelectorAll('[data-zone-fc]').forEach(sel => {
+        sel.addEventListener('change', e => {
+          const i = parseInt(sel.getAttribute('data-zone-fc'), 10);
+          state.materialZones[i].fc = parseInt(e.target.value, 10);
+          renderAll();
+        });
+      });
+
+      container.querySelectorAll('[data-zone-fy]').forEach(sel => {
+        sel.addEventListener('change', e => {
+          const i = parseInt(sel.getAttribute('data-zone-fy'), 10);
+          state.materialZones[i].fy = parseInt(e.target.value, 10);
+          renderAll();
+        });
+      });
+
+      container.querySelectorAll('[data-zone-steelfy]').forEach(sel => {
+        sel.addEventListener('change', e => {
+          const i = parseInt(sel.getAttribute('data-zone-steelfy'), 10);
+          state.materialZones[i].steelFy = parseInt(e.target.value, 10);
+          renderAll();
+        });
+      });
+    }
+
+    // =========================================================================
+    // 3. 結構速算與分層/矩形柱斷面計算引擎
+    // =========================================================================
+    function computeColTargetAspectRatio(colType) {
+      if (state.colAspectMode === 'square') return 1.0;
+      if (state.colAspectMode === 'rect_custom') return state.customColRatio;
+
+      // 自動依 X/Y 跨度比 (Lx / Ly) 與邊柱偏心方向決定 Bx / Dy
+      // 當 Lx > Ly 時，X 向大梁跨度較大、端彎矩較大，柱寬 Bx 自動加長以提供較大慣性矩 Ix
+      let baseRatio = Math.pow(state.spanX / state.spanY, 0.75);
+      if (colType === 'C2' && Math.abs(state.spanX - state.spanY) < 0.3) {
+        // 當 X/Y 跨度相等時，邊柱仍給微矩形比 (1.15) 反映單向偏心彎矩差異
+        baseRatio = 1.15;
+      }
+      return Math.max(0.65, Math.min(1.55, baseRatio));
+    }
+
+    // =========================================================================
+    // 3.1 設計地震力：建築物耐震設計規範 靜力分析法
+    // =========================================================================
+    function computeSeismic(totalHeight) {
+      const sds = state.sds, sd1 = state.sd1;
+      const I = state.importanceI, R = state.Rsys, ay = state.alphaY;
+      const Ct = state.structType === 'RC' ? 0.070 : 0.085;
+      const T = Ct * Math.pow(totalHeight, 0.75);
+      const T0 = sd1 / sds;
+
+      let SaD, saCase;
+      if (T <= 0.2 * T0) { SaD = sds * (0.4 + 3 * T / T0); saCase = 'T ≤ 0.2T0D：SaD = SDS(0.4 + 3T/T0D)'; }
+      else if (T <= T0) { SaD = sds; saCase = '0.2T0D < T ≤ T0D：SaD = SDS'; }
+      else if (T <= 2.5 * T0) { SaD = sd1 / T; saCase = 'T0D < T ≤ 2.5T0D：SaD = SD1/T'; }
+      else { SaD = 0.4 * sds; saCase = 'T > 2.5T0D：SaD = 0.4SDS'; }
+
+      const Ra = 1 + (R - 1) / 1.5;
+      const s = Math.sqrt(2 * Ra - 1);
+      let Fu;
+      if (T >= T0) Fu = Ra;
+      else if (T >= 0.6 * T0) Fu = s + (Ra - s) * (T - 0.6 * T0) / (0.4 * T0);
+      else if (T >= 0.2 * T0) Fu = s;
+      else Fu = 1 + (s - 1) * T / (0.2 * T0);
+
+      const ratio = SaD / Fu;
+      const ratioM = ratio <= 0.3 ? ratio : (ratio < 0.8 ? 0.52 * ratio + 0.144 : 0.70 * ratio);
+      const Cmain = (I / (1.4 * ay)) * ratioM;          // 設計地震力
+      const Cstar = (I * Fu / (4.2 * ay)) * ratioM;     // 中小度地震不降伏
+      const C = Math.max(Cmain, Cstar);
+      return {
+        Ct, T, T0, SaD, saCase, Ra, Fu, ratio, ratioM, Cmain, Cstar, C,
+        governs: Cstar > Cmain ? '中小度地震 V*' : '設計地震力 V'
+      };
+    }
+
+    // 豎向分配：Fx = (V − Ft)·wx·hx / Σ(wi·hi)，各層重量相同
+    function computeStoryForces(V, T, yLevels, Z) {
+      const Ft = T > 0.7 ? Math.min(0.07 * T * V, 0.25 * V) : 0;
+      let sumH = 0;
+      for (let l = 1; l <= Z; l++) sumH += yLevels[l];
+      const F = [0];
+      for (let l = 1; l <= Z; l++) F.push((V - Ft) * yLevels[l] / Math.max(1e-9, sumH));
+      F[Z] += Ft;
+      return { F, Ft };
+    }
+
+    // =========================================================================
+    // 3.2 RC 梁：強度設計 φMn ≥ Mu
+    // =========================================================================
+    function rcFlexure(B, D, As, fc, fy) { // 公稱彎矩強度 Mn (tf·m)
+      const d = D - 7;
+      const a = (As * fy) / (0.85 * fc * B);
+      return (As * fy * (d - a / 2)) / 1e5;
+    }
+
+    function rcAsRequired(B, D, MuTfm, fc, fy) {
+      const d = D - 7;
+      const Mn = (MuTfm * 1e5) / 0.9;
+      const k = (fy * fy) / (1.7 * fc * B);
+      const disc = Math.pow(fy * d, 2) - 4 * k * Mn;
+      const AsMin = Math.max(14 / fy, (0.8 * Math.sqrt(fc)) / fy) * B * d;
+      if (disc < 0) return Infinity;
+      return Math.max(AsMin, (fy * d - Math.sqrt(disc)) / (2 * k));
+    }
+
+    function sizeRCBeam(spanM, MuTfm, isMain, zone, inc) {
+      const fcMod = Math.pow(280 / zone.fc, 0.18);
+      const depthDiv = isMain ? (state.ll >= 400 ? 10.0 : 11.2) : 14.5;
+      const minD = isMain ? 55 : 40;
+      const minB = isMain ? 35 : 25;
+      const widthOf = d => Math.max(minB, roundUp5(d * 0.55));
+      const capAt = d => {
+        const b = widthOf(d);
+        return 0.9 * rcFlexure(b, d, RHO_BEAM_DESIGN * b * (d - 7), zone.fc, zone.fy);
+      };
+      const D0 = Math.max(minD, roundUp5(((spanM * 100) / depthDiv) * fcMod));
+      let D = D0 + 5 * inc;
+      while (capAt(D) < MuTfm && D < 200) D += 5;
+      const B = widthOf(D);
+      const As = rcAsRequired(B, D, MuTfm, zone.fc, zone.fy);
+      return {
+        B, D, As, rho: As / (B * (D - 7)),
+        phiMn: capAt(D), Mu: MuTfm, fc: zone.fc, fy: zone.fy,
+        enlarged: D > D0,
+        label: `${B} × ${D} cm`,
+        ratio: ((spanM * 100) / D).toFixed(1)
+      };
+    }
+
+    // =========================================================================
+    // 3.3 SS 梁：φMn = 0.9·Zx·Fy ≥ Mu
+    // =========================================================================
+    function sizeSSBeam(spanM, MuTfm, isMain, zone, inc) {
+      const list = STEEL_H_SECTIONS;
+      const minDepthMm = (spanM * 1000) / (isMain ? 17.5 : 22.0);
+      let idx = list.findIndex(s => s.d >= minDepthMm && (0.9 * s.Zx * zone.steelFy) / 1e5 >= MuTfm);
+      const fits = idx >= 0;
+      if (idx < 0) idx = list.length - 1;
+      idx = Math.min(list.length - 1, idx + inc);
+      const s = list[idx];
+      const phiMn = (0.9 * s.Zx * zone.steelFy) / 1e5;
+      return {
+        B: s.b / 10, D: s.d / 10, Ix: s.Ix, Zx: s.Zx, A: s.A, weight: s.weight,
+        phiMn, Mu: MuTfm, fy: zone.steelFy,
+        overflow: !fits || phiMn < MuTfm,
+        enlarged: inc > 0,
+        label: s.name,
+        ratio: ((spanM * 1000) / s.d).toFixed(1)
+      };
+    }
+
+    // =========================================================================
+    // 3.4 柱斷面初估 (軸力) — 之後由 P-M / 強柱弱梁 / 位移角迭代放大
+    // =========================================================================
+    function sizeRCColumn(PuTf, fc, storyH, colType, inc) {
+      const alpha = Math.max(0.20, 0.30 - (state.sds - 0.5) * 0.15); // 預留地震彎矩容量
+      const reqAg = (PuTf * 1000) / (alpha * fc);
+      const minBx = Math.max(40, roundUp5((storyH * 100) / 8.5), roundUp5((state.spanX * 100) / 15.5));
+      const minDy = Math.max(40, roundUp5((storyH * 100) / 8.5), roundUp5((state.spanY * 100) / 15.5));
+      const ar = computeColTargetAspectRatio(colType);
+      const Bx = Math.max(minBx, roundUp5(Math.sqrt(reqAg * ar))) + 5 * inc;
+      const Dy = Math.max(minDy, roundUp5(Math.sqrt(reqAg / ar))) + 5 * inc;
+      return { Bx, Dy, B: Bx, D: Dy, Ag: Bx * Dy, label: `${Bx} × ${Dy} cm` };
+    }
+
+    function makeSSColSpec(BxMm, DyMm, t) {
+      const b = BxMm / 10, d = DyMm / 10, tc = t / 10;
+      if (state.colShape === 'H') {
+        // H 柱：腹板沿 X 向 (X 向構架為強軸)，翼板寬 = Dy
+        const tw = Math.max(0.9, Math.round(t * 0.6) / 10);
+        const D = b, bf = d, tf = tc;
+        const Ag = 2 * bf * tf + (D - 2 * tf) * tw;
+        const Ix = (bf * Math.pow(D, 3) - (bf - tw) * Math.pow(D - 2 * tf, 3)) / 12;
+        const Iy = (2 * tf * Math.pow(bf, 3) + (D - 2 * tf) * Math.pow(tw, 3)) / 12;
+        const Zx = bf * tf * (D - tf) + (tw * Math.pow(D - 2 * tf, 2)) / 4;
+        const Zy = (tf * bf * bf) / 2 + ((D - 2 * tf) * tw * tw) / 4;
+        return {
+          Bx: b, Dy: d, B: b, D: d, t, Ag, Ix, Iy, Zx, Zy,
+          weight: +(Ag * 0.785).toFixed(1),
+          label: `BH ${BxMm}×${DyMm}×${Math.round(tw * 10)}×${t}`
+        };
+      }
+      const Ag = b * d - (b - 2 * tc) * (d - 2 * tc);
+      const Ix = (d * Math.pow(b, 3) - (d - 2 * tc) * Math.pow(b - 2 * tc, 3)) / 12;
+      const Iy = (b * Math.pow(d, 3) - (b - 2 * tc) * Math.pow(d - 2 * tc, 3)) / 12;
+      const Zx = (d * b * b - (d - 2 * tc) * Math.pow(b - 2 * tc, 2)) / 4;
+      const Zy = (b * d * d - (b - 2 * tc) * Math.pow(d - 2 * tc, 2)) / 4;
+      return {
+        Bx: b, Dy: d, B: b, D: d, t, Ag, Ix, Iy, Zx, Zy,
+        weight: +(Ag * 0.785).toFixed(1),
+        label: `BOX ${BxMm}×${DyMm}×${t}`
+      };
+    }
+
+    function sizeSSColumn(PuTf, steelFy, colType, floorsAbove, inc) {
+      const ar = computeColTargetAspectRatio(colType);
+      const baseMinMm = Math.max(350, Math.max(state.spanX, state.spanY) * 42 + floorsAbove * 12);
+      let Bx = Math.max(300, Math.min(1000, roundUp50mm(baseMinMm * Math.sqrt(ar)))) + 50 * inc;
+      let Dy = Math.max(300, Math.min(1000, roundUp50mm(baseMinMm / Math.sqrt(ar)))) + 50 * inc;
+      if (state.colShape === 'H') Dy = Math.min(Dy, Bx);
+      const reqAg = (PuTf * 1000) / (0.5 * steelFy); // 預留彎矩容量
+      const lam = Math.sqrt(E_STEEL / steelFy);
+      const plates = [12, 16, 19, 22, 25, 28, 32, 36, 40, 45, 50];
+      for (let guard = 0; guard < 40; guard++) {
+        // 寬厚比 (結實斷面)：BOX b/t ≤ 1.12√(E/Fy)；H 翼板 bf/2tf ≤ 0.38√(E/Fy)
+        const tMin = state.colShape === 'H' ? Dy / (2 * 0.38 * lam) : Math.max(Bx, Dy) / (1.12 * lam);
+        for (const t of plates) {
+          if (t < tMin) continue;
+          const spec = makeSSColSpec(Bx, Dy, t);
+          if (spec.Ag >= reqAg) return spec;
+        }
+        Bx += 50;
+        Dy += 50;
+        if (state.colShape === 'H') Dy = Math.min(Dy, Bx);
+      }
+      return makeSSColSpec(Bx, Dy, 50);
+    }
+
+    // =========================================================================
+    // 3.5 柱強度：RC 應變諧和 P-M 曲線 / SS AISC H1 互制式
+    // =========================================================================
+    // Bw = 垂直彎矩方向之柱寬，D = 彎矩方向柱深 (cm)；鋼筋沿周邊約 15 cm 間距均佈
+    function rcPMCurve(Bw, D, fc, fy, rho) {
+      const dp = 6.5, Es = 2.04e6, ecu = 0.003, ey = fy / Es;
+      const Ag = Bw * D, Ast = rho * Ag;
+      const nW = Math.max(2, Math.round((Bw - 2 * dp) / 15) + 1);
+      const nD = Math.max(2, Math.round((D - 2 * dp) / 15) + 1);
+      const layers = [];
+      for (let i = 0; i < nD; i++) {
+        layers.push({ y: dp + (i * (D - 2 * dp)) / (nD - 1), n: i === 0 || i === nD - 1 ? nW : 2 });
+      }
+      const Ab = Ast / layers.reduce((s, l) => s + l.n, 0);
+      const beta1 = fc <= 280 ? 0.85 : Math.max(0.65, 0.85 - (0.05 * (fc - 280)) / 70);
+      const PnMax = (0.80 * (0.85 * fc * (Ag - Ast) + fy * Ast)) / 1000; // tf
+      const phiPnMax = 0.65 * PnMax;
+      const dt = D - dp;
+
+      const calc = c => {
+        const a = Math.min(beta1 * c, D);
+        let P = 0.85 * fc * a * Bw;
+        let M = P * (D / 2 - a / 2);
+        for (const l of layers) {
+          let fs = Math.max(-fy, Math.min(fy, Es * ecu * (c - l.y) / c));
+          if (l.y < a && fs > 0) fs -= 0.85 * fc;
+          const F = fs * l.n * Ab;
+          P += F;
+          M += F * (D / 2 - l.y);
+        }
+        const et = (ecu * (dt - c)) / c;
+        const phi = et <= ey ? 0.65 : (et >= 0.005 ? 0.90 : 0.65 + (0.25 * (et - ey)) / (0.005 - ey));
+        return { Pn: P / 1000, Mn: M / 1e5, phi };
+      };
+
+      const design = [{ M: 0, P: phiPnMax }];
+      const nominal = [{ M: 0, P: PnMax }];
+      let prev = null;
+      for (let i = 0; i <= 90; i++) {
+        const c = D * 3 * Math.pow(0.02 / 3, i / 90);
+        const r = calc(c);
+        if (r.Pn < 0) {
+          if (prev) {
+            const s = prev.Pn / (prev.Pn - r.Pn);
+            const Mn0 = prev.Mn + s * (r.Mn - prev.Mn);
+            const phi0 = prev.phi + s * (r.phi - prev.phi);
+            nominal.push({ M: Mn0, P: 0 });
+            design.push({ M: phi0 * Mn0, P: 0 });
+          }
+          break;
+        }
+        nominal.push({ M: r.Mn, P: Math.min(r.Pn, PnMax) });
+        design.push({ M: r.phi * r.Mn, P: Math.min(r.phi * r.Pn, phiPnMax) });
+        prev = r;
+      }
+      const cb = (ecu / (ecu + ey)) * dt;
+      const bal = calc(cb);
+      return {
+        design, nominal, phiPnMax,
+        phiPb: 0.65 * bal.Pn, phiMb: 0.65 * bal.Mn,
+        phiMn0: design[design.length - 1].M
+      };
+    }
+
+    function mAtP(points, P) { // points：軸力由大至 0
+      if (P >= points[0].P) return 0;
+      for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i], b = points[i + 1];
+        if (P <= a.P && P >= b.P) {
+          if (Math.abs(a.P - b.P) < 1e-9) return Math.max(a.M, b.M);
+          return a.M + ((P - a.P) / (b.P - a.P)) * (b.M - a.M);
+        }
+      }
+      return points[points.length - 1].M;
+    }
+
+    // 徑向 D/C：需求點 (Mu, Pu) 與原點連線交包絡線
+    function radialDC(points, Pu, Mu) {
+      if (Pu <= 1e-9 && Mu <= 1e-9) return 0;
+      for (let i = 0; i < points.length - 1; i++) {
+        const A = points[i], B = points[i + 1];
+        const crA = Mu * A.P - Pu * A.M;
+        const den = Mu * (B.P - A.P) - Pu * (B.M - A.M);
+        if (Math.abs(den) < 1e-12) continue;
+        const s = -crA / den;
+        if (s >= -1e-9 && s <= 1 + 1e-9) {
+          const QM = A.M + s * (B.M - A.M), QP = A.P + s * (B.P - A.P);
+          if (QM * Mu + QP * Pu > 0) return Math.hypot(Mu, Pu) / Math.max(1e-9, Math.hypot(QM, QP));
+        }
+      }
+      return 9.99;
+    }
+
+    function ssColumnCapacity(spec, Fy, storyH, dir) {
+      const Z = dir === 'X' ? spec.Zx : spec.Zy;
+      const rmin = Math.sqrt(Math.min(spec.Ix, spec.Iy) / spec.Ag);
+      const KLr = (storyH * 100) / rmin; // K = 1.0
+      const Fe = (Math.PI * Math.PI * E_STEEL) / (KLr * KLr);
+      const Fcr = KLr <= 4.71 * Math.sqrt(E_STEEL / Fy) ? Math.pow(0.658, Fy / Fe) * Fy : 0.877 * Fe;
+      return {
+        Pc: (0.9 * Fcr * spec.Ag) / 1000,
+        Mc: (0.9 * Z * Fy) / 1e5,
+        Py: (spec.Ag * Fy) / 1000,
+        Z, KLr
+      };
+    }
+
+    function ssInteraction(Pu, Mu, cap) {
+      const p = Pu / cap.Pc;
+      return p >= 0.2 ? p + (8 / 9) * (Mu / cap.Mc) : p / 2 + Mu / cap.Mc;
+    }
+
+    // =========================================================================
+    // 3.6 樓層區段
+    // =========================================================================
+    // 若 1F 與 2F 樓高不同且 Zone 1 涵蓋 >=2F，自動拆出「1F」與「2F~endFloor」
+    function buildEvaluationSegments() {
+      normalizeMaterialZones();
+      const Z = state.floors;
+      const segments = [];
+      for (let i = 0; i < state.materialZones.length; i++) {
+        const z = state.materialZones[i];
+        if (i === 0 && Z > 1 && z.endFloor >= 2 && Math.abs(state.firstStoryHeight - state.storyHeight) >= 0.05) {
+          segments.push({ startFloor: 1, endFloor: 1, label: '1F', storyH: state.firstStoryHeight, zone: z });
+          segments.push({
+            startFloor: 2, endFloor: z.endFloor,
+            label: z.endFloor === 2 ? '2F' : `2F~${z.endFloor}F`,
+            storyH: state.storyHeight, zone: z
+          });
+        } else {
+          const lbl = z.startFloor === z.endFloor ? `${z.startFloor}F` : `${z.startFloor}F~${z.endFloor}F`;
+          const sh = z.startFloor === 1 ? state.firstStoryHeight : state.storyHeight;
+          segments.push({ startFloor: z.startFloor, endFloor: z.endFloor, label: lbl, storyH: sh, zone: z });
+        }
+      }
+      return segments;
+    }
+
+    function zoneIndexOfFloor(fl) {
+      for (let i = state.materialZones.length - 1; i >= 0; i--) {
+        if (fl >= state.materialZones[i].startFloor) return i;
+      }
+      return 0;
+    }
+
+    // =========================================================================
+    // 4. 2D 剛架直接剛度法 (帶狀矩陣、重力與地震分開求解後疊加)
+    // =========================================================================
+    function solveBanded(Kb, hb, n, rhsList) {
+      for (let k = 0; k < n; k++) {
+        const rowK = Kb[k];
+        const piv = rowK[hb];
+        if (Math.abs(piv) < 1e-12) continue;
+        const lim = Math.min(n - 1, k + hb);
+        for (let i = k + 1; i <= lim; i++) {
+          const rowI = Kb[i];
+          const aik = rowI[k - i + hb];
+          if (aik === 0) continue;
+          const f = aik / piv;
+          for (let j = k; j <= lim; j++) rowI[j - i + hb] -= f * rowK[j - k + hb];
+          for (const b of rhsList) b[i] -= f * b[k];
+        }
+      }
+      return rhsList.map(b => {
+        const x = new Float64Array(n);
+        for (let i = n - 1; i >= 0; i--) {
+          let sum = b[i];
+          const lim = Math.min(n - 1, i + hb);
+          for (let j = i + 1; j <= lim; j++) sum -= Kb[i][j - i + hb] * x[j];
+          x[i] = Math.abs(Kb[i][hb]) > 1e-12 ? sum / Kb[i][hb] : 0;
+        }
+        return x;
+      });
+    }
+
+    function colElemProps(spec, zone, dir) {
+      if (state.structType === 'RC') {
+        const E = 15000 * Math.sqrt(zone.fc) * 10; // tf/m²
+        const bPerp = (dir === 'X' ? spec.Dy : spec.Bx) / 100;
+        const h = (dir === 'X' ? spec.Bx : spec.Dy) / 100;
+        return { E, A: bPerp * h, I: (0.70 * bPerp * Math.pow(h, 3)) / 12 };
+      }
+      return { E: E_STEEL * 10, A: spec.Ag / 1e4, I: (dir === 'X' ? spec.Ix : spec.Iy) / 1e8 };
+    }
+
+    function beamElemProps(spec, zone) {
+      if (state.structType === 'RC') {
+        const E = 15000 * Math.sqrt(zone.fc) * 10;
+        const b = spec.B / 100, d = spec.D / 100;
+        return { E, A: b * d, I: (0.35 * 1.5 * b * Math.pow(d, 3)) / 12 }; // 0.35Ig × T 梁翼版 1.5
+      }
+      return { E: E_STEEL * 10, A: spec.A / 1e4, I: (spec.Ix * 1.2) / 1e8 }; // 合成作用 ×1.2
+    }
+
+    function solveFrame(dir, ctx) {
+      const { Z, cols, beams, segIndexOfFloor, storyF, wE, wu } = ctx;
+      const bays = dir === 'X' ? state.baysX : state.baysY;
+      const span = dir === 'X' ? state.spanX : state.spanY;
+      const other = dir === 'X' ? state.spanY : state.spanX;
+      const numFrames = (dir === 'X' ? state.baysY : state.baysX) + 1;
+      const nCols = bays + 1;
+      const nLevels = Z + 1;
+      const nDOF = nCols * nLevels * 3;
+      const nFixed = nCols * 3;
+      const nFree = nDOF - nFixed;
+      const hb = 3 * nCols + 2;
+
+      const yLevels = [0];
+      for (let lvl = 1; lvl <= Z; lvl++) yLevels.push(yLevels[lvl - 1] + getStoryHeight(lvl));
+
+      const nodes = [];
+      for (let lvl = 0; lvl < nLevels; lvl++) {
+        for (let c = 0; c < nCols; c++) nodes.push({ id: lvl * nCols + c, x: c * span, y: yLevels[lvl], lvl, col: c });
+      }
+
+      const elements = [];
+      for (let lvl = 1; lvl <= Z; lvl++) {
+        const zone = getZoneForFloor(lvl);
+        const si = segIndexOfFloor(lvl);
+        for (let c = 0; c < nCols; c++) {
+          const kind = c === 0 || c === nCols - 1 ? 'end' : 'int';
+          const spec = cols[kind === 'end' ? 'C2' : 'C1'][si];
+          const p = colElemProps(spec, zone, dir);
+          elements.push({ type: 'col', kind, n1: (lvl - 1) * nCols + c, n2: lvl * nCols + c, E: p.E, A: p.A, I: p.I, w: 0, lvl, col: c });
+        }
+      }
+      const wBeam = (wE * 0.5 * other) / 1000; // tf/m (雙向各分擔一半)
+      for (let lvl = 1; lvl <= Z; lvl++) {
+        const zi = zoneIndexOfFloor(lvl);
+        const p = beamElemProps(beams[dir][zi], state.materialZones[zi]);
+        for (let b = 0; b < bays; b++) {
+          elements.push({ type: 'beam', n1: lvl * nCols + b, n2: lvl * nCols + b + 1, E: p.E, A: p.A, I: p.I, w: wBeam, lvl, bay: b, zi });
+        }
+      }
+
+      const Kb = Array.from({ length: nFree }, () => new Float64Array(2 * hb + 1));
+      const FG = new Float64Array(nFree);
+      const FE = new Float64Array(nFree);
+      const addF = (vec, g, val) => { const e = g - nFixed; if (e >= 0) vec[e] += val; };
+
+      for (let lvl = 1; lvl <= Z; lvl++) {
+        const Flvl = storyF[lvl] / numFrames;
+        for (let c = 0; c < nCols; c++) addF(FE, (lvl * nCols + c) * 3, Flvl / nCols);
+      }
+
+      for (const el of elements) {
+        const p1 = nodes[el.n1], p2 = nodes[el.n2];
+        const dx = p2.x - p1.x, dy = p2.y - p1.y;
+        const L = Math.hypot(dx, dy);
+        const c = dx / L, s = dy / L;
+        const EA_L = (el.E * el.A) / L;
+        const EI_L = (el.E * el.I) / L;
+        const EI_L2 = EI_L / L, EI_L3 = EI_L2 / L;
+        const kLocal = [
+          [EA_L, 0, 0, -EA_L, 0, 0],
+          [0, 12 * EI_L3, 6 * EI_L2, 0, -12 * EI_L3, 6 * EI_L2],
+          [0, 6 * EI_L2, 4 * EI_L, 0, -6 * EI_L2, 2 * EI_L],
+          [-EA_L, 0, 0, EA_L, 0, 0],
+          [0, -12 * EI_L3, -6 * EI_L2, 0, 12 * EI_L3, -6 * EI_L2],
+          [0, 6 * EI_L2, 2 * EI_L, 0, -6 * EI_L2, 4 * EI_L]
+        ];
+        const T = [
+          [c, s, 0, 0, 0, 0], [-s, c, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0],
+          [0, 0, 0, c, s, 0], [0, 0, 0, -s, c, 0], [0, 0, 0, 0, 0, 1]
+        ];
+        const kG = Array.from({ length: 6 }, () => new Float64Array(6));
+        for (let i = 0; i < 6; i++) {
+          for (let j = 0; j < 6; j++) {
+            let sum = 0;
+            for (let m = 0; m < 6; m++) {
+              if (T[m][i] === 0) continue;
+              let inner = 0;
+              for (let q = 0; q < 6; q++) inner += kLocal[m][q] * T[q][j];
+              sum += T[m][i] * inner;
+            }
+            kG[i][j] = sum;
+          }
+        }
+        const dofs = [el.n1 * 3, el.n1 * 3 + 1, el.n1 * 3 + 2, el.n2 * 3, el.n2 * 3 + 1, el.n2 * 3 + 2];
+        for (let i = 0; i < 6; i++) {
+          const ei = dofs[i] - nFixed;
+          if (ei < 0) continue;
+          for (let j = 0; j < 6; j++) {
+            const ej = dofs[j] - nFixed;
+            if (ej < 0) continue;
+            Kb[ei][ej - ei + hb] += kG[i][j];
+          }
+        }
+        if (el.w > 0) {
+          const V_fe = (el.w * L) / 2, M_fe = (el.w * L * L) / 12;
+          addF(FG, dofs[1], -V_fe);
+          addF(FG, dofs[2], -M_fe);
+          addF(FG, dofs[4], -V_fe);
+          addF(FG, dofs[5], M_fe);
+        }
+        Object.assign(el, { L, kLocal, T, dofs });
+      }
+
+      const [uGf, uEf] = solveBanded(Kb, hb, nFree, [FG, FE]);
+      const uG = new Float64Array(nDOF), uE = new Float64Array(nDOF);
+      for (let i = 0; i < nFree; i++) { uG[i + nFixed] = uGf[i]; uE[i + nFixed] = uEf[i]; }
+
+      const localForces = (el, u, withFEF) => {
+        const ug = el.dofs.map(d => u[d]);
+        const ul = new Float64Array(6);
+        for (let i = 0; i < 6; i++) { let s2 = 0; for (let j = 0; j < 6; j++) s2 += el.T[i][j] * ug[j]; ul[i] = s2; }
+        const f = new Float64Array(6);
+        for (let i = 0; i < 6; i++) { let s2 = 0; for (let j = 0; j < 6; j++) s2 += el.kLocal[i][j] * ul[j]; f[i] = s2; }
+        if (withFEF && el.w > 0) {
+          const V_fe = (el.w * el.L) / 2, M_fe = (el.w * el.L * el.L) / 12;
+          f[1] += V_fe; f[2] += M_fe; f[4] += V_fe; f[5] -= M_fe;
+        }
+        return f;
+      };
+
+      const g16 = wu / wE; // 1.2D+1.0L → 1.2D+1.6L 換算
+      const zoneBeamMu = state.materialZones.map(() => 0);
+      const colDem = Array.from({ length: Z + 1 }, () => ({ int: { M: 0, Pe: 0 }, end: { M: 0, Pe: 0 } }));
+      let maxBeamMoment = 0, maxColAxial = 0, maxColMoment1F = 0;
+
+      for (const el of elements) {
+        const fG = localForces(el, uG, true);
+        const fE = localForces(el, uE, false);
+        el.MG1 = -fG[2]; el.MG2 = fG[5]; el.PG = -fG[0];
+        el.ME1 = -fE[2]; el.ME2 = fE[5]; el.PE = -fE[0];
+        el.M1 = el.MG1 + el.ME1;
+        el.M2 = el.MG2 + el.ME2;
+        el.Axial = el.PG + el.PE;
+        const env1 = Math.abs(el.MG1) + Math.abs(el.ME1);
+        const env2 = Math.abs(el.MG2) + Math.abs(el.ME2);
+        if (el.type === 'beam') {
+          el.Mmid = (el.w * el.L * el.L) / 8 - (Math.abs(el.MG1) + Math.abs(el.MG2)) / 2;
+          const MuGrav = g16 * Math.max(Math.abs(el.MG1), Math.abs(el.MG2), el.Mmid);
+          const Mu = Math.max(MuGrav, env1, env2);
+          zoneBeamMu[el.zi] = Math.max(zoneBeamMu[el.zi], Mu);
+          maxBeamMoment = Math.max(maxBeamMoment, Math.abs(el.M1), Math.abs(el.M2), Math.abs(el.Mmid));
+        } else {
+          el.Mmid = 0;
+          const d = colDem[el.lvl][el.kind];
+          d.M = Math.max(d.M, env1, env2);
+          d.Pe = Math.max(d.Pe, Math.abs(el.PE));
+          maxColAxial = Math.max(maxColAxial, Math.abs(el.Axial));
+          if (el.lvl === 1) maxColMoment1F = Math.max(maxColMoment1F, env1, env2);
+        }
+      }
+
+      const driftPerLevel = [0];
+      let maxDrift = 0;
+      for (let lvl = 1; lvl <= Z; lvl++) {
+        const d = Math.abs(uE[lvl * nCols * 3] - uE[(lvl - 1) * nCols * 3]) / getStoryHeight(lvl);
+        driftPerLevel.push(d);
+        maxDrift = Math.max(maxDrift, d);
+      }
+
+      return {
+        dir, nodes, elements, uGlobal: uE, yLevels, numFrames, nCols,
+        zoneBeamMu, colDem, driftPerLevel,
+        maxBeamMoment, maxColAxial, maxColMoment: maxColMoment1F,
+        maxDrift, maxDriftPermille: maxDrift * 1000
+      };
+    }
+
+    // =========================================================================
+    // 5. 整體設計流程：初估 → 構架分析 → 強度 / 強柱弱梁 / 位移角檢核 → 放大斷面迭代
+    // =========================================================================
+    function computeStructuralDesign() {
+      normalizeMaterialZones();
+      const isRC = state.structType === 'RC';
+      const Z = state.floors;
+      const H1 = state.firstStoryHeight;
+      const H = state.storyHeight;
+      const totalHeight = getTotalBuildingHeight();
+      const Nx = state.baysX, Lx = state.spanX, Ny = state.baysY, Ly = state.spanY;
+      const totalWidthX = Nx * Lx, totalLengthY = Ny * Ly;
+      const floorArea = totalWidthX * totalLengthY;
+      const totalGFA = floorArea * Z;
+      const Lmax = Math.max(Lx, Ly), Lmin = Math.min(Lx, Ly);
+      const div = state.subBeamDiv;
+
+      // 小梁跨越短向 Lmin，沿長向等分配置 (間距 Lmax/div)
+      const subSpacing = div > 1 ? Lmax / div : 0;
+      const panelS = div > 1 ? Math.min(Lmin, subSpacing) : Lmin;
+      const panelL = div > 1 ? Math.max(Lmin, subSpacing) : Lmax;
+
+      // 1. 樓板厚度 (cm)
+      let slabThick;
+      if (isRC) {
+        const raw = panelL / panelS >= 2 ? (panelS * 100) / 28 : (2 * (panelS + panelL) * 100) / 180;
+        slabThick = Math.max(15, Math.ceil(raw));
+        if (state.ll >= 500) slabThick = Math.max(18, slabThick);
+      } else {
+        slabThick = state.ll >= 500 ? 18 : 15;
+      }
+
+      // 2. 載重
+      const selfWeight = isRC ? (slabThick / 100) * 2400 + 290 : (slabThick / 100) * 2400 * 0.85 + 115;
+      const DL = Math.round(selfWeight + state.sdl);
+      const LL = state.ll;
+      const wu = 1.2 * DL + 1.6 * LL;
+      const wE = 1.2 * DL + 1.0 * LL;
+      const wSeismic = DL + (state.occupancy === 'storage_heavy' ? 0.25 * LL : 0);
+
+      // 3. 地震力
+      const totalWeightTf = (wSeismic * totalGFA) / 1000;
+      const seis = computeSeismic(totalHeight);
+      const baseShearTf = seis.C * totalWeightTf;
+      const yLevels = [0];
+      for (let l = 1; l <= Z; l++) yLevels.push(yLevels[l - 1] + getStoryHeight(l));
+      const { F: storyF, Ft } = computeStoryForces(baseShearTf, seis.T, yLevels, Z);
+
+      // 4. 受荷面積與柱數
+      const At = { C1: Lx * Ly, C2: 0.5 * Lx * Ly, C3: 0.25 * Lx * Ly };
+      const amp = { C1: 1.10, C2: 1.22, C3: 1.35 }; // 初估用偏心放大
+      const colCount = {
+        C1: Math.max(0, Nx - 1) * Math.max(0, Ny - 1),
+        C2: 2 * Math.max(0, Nx - 1) + 2 * Math.max(0, Ny - 1),
+        C3: 4
+      };
+      const colNames = { C1: '內柱', C2: '邊柱', C3: '角柱' };
+      const segments = buildEvaluationSegments();
+      const segIndexOfFloor = fl => {
+        const i = segments.findIndex(s => fl >= s.startFloor && fl <= s.endFloor);
+        return i < 0 ? 0 : i;
+      };
+      const zones = state.materialZones;
+
+      // 重力 Mu 初值 (1.2D+1.6L)
+      const MuGravX = ((wu * 0.5 * Ly) / 1000) * Lx * Lx / 10;
+      const MuGravY = ((wu * 0.5 * Lx) / 1000) * Ly * Ly / 10;
+      const MuSub = div > 1 ? ((wu * subSpacing) / 1000) * Lmin * Lmin / 10 : 0;
+
+      const colInc = { C1: segments.map(() => 0), C2: segments.map(() => 0), C3: segments.map(() => 0) };
+      const beamInc = { X: zones.map(() => 0), Y: zones.map(() => 0) };
+      const beamMu = { X: zones.map(() => MuGravX), Y: zones.map(() => MuGravY) };
+      const reasons = new Set();
+
+      const sizeColumns = () => {
+        const out = {};
+        for (const code of ['C1', 'C2', 'C3']) {
+          const arr = segments.map((seg, si) => {
+            const n = Z - seg.startFloor + 1;
+            const PuInit = (wu * At[code] * n * amp[code]) / 1000;
+            return isRC
+              ? sizeRCColumn(PuInit, seg.zone.fc, seg.storyH, code, colInc[code][si])
+              : sizeSSColumn(PuInit, seg.zone.steelFy, code, n, colInc[code][si]);
+          });
+          // 下層斷面不小於上層
+          for (let i = arr.length - 2; i >= 0; i--) {
+            const lo = arr[i], hi = arr[i + 1];
+            if (lo.Bx < hi.Bx || lo.Dy < hi.Dy) {
+              if (isRC) arr[i] = { ...lo, Bx: Math.max(lo.Bx, hi.Bx), Dy: Math.max(lo.Dy, hi.Dy) };
+              else arr[i] = makeSSColSpec(Math.max(lo.Bx, hi.Bx) * 10, Math.max(lo.Dy, hi.Dy) * 10, Math.max(lo.t, hi.t));
+              if (isRC) { arr[i].Ag = arr[i].Bx * arr[i].Dy; arr[i].label = `${arr[i].Bx} × ${arr[i].Dy} cm`; }
+            }
+          }
+          out[code] = arr;
+        }
+        return out;
+      };
+
+      const sizeBeams = () => {
+        const out = { X: [], Y: [] };
+        zones.forEach((z, zi) => {
+          out.X.push(isRC ? sizeRCBeam(Lx, beamMu.X[zi], true, z, beamInc.X[zi]) : sizeSSBeam(Lx, beamMu.X[zi], true, z, beamInc.X[zi]));
+          out.Y.push(isRC ? sizeRCBeam(Ly, beamMu.Y[zi], true, z, beamInc.Y[zi]) : sizeSSBeam(Ly, beamMu.Y[zi], true, z, beamInc.Y[zi]));
+        });
+        return out;
+      };
+
+      const checkColumn = (code, si, spec, femX, femY, beams) => {
+        const seg = segments[si];
+        const n = Z - seg.startFloor + 1;
+        const Pu1 = (wu * At[code] * n) / 1000;   // 1.2D + 1.6L
+        const Pg2 = (wE * At[code] * n) / 1000;   // 1.2D + 1.0L (+E)
+        const nb = code === 'C3' ? 1 : 2;
+        let worst = null, minScwb = Infinity;
+        for (const dir of ['X', 'Y']) {
+          const fem = dir === 'X' ? femX : femY;
+          const kind = code === 'C1' && fem.nCols > 2 ? 'int' : 'end';
+          let MuE = 0, Pe = 0;
+          for (let f = seg.startFloor; f <= seg.endFloor; f++) {
+            MuE = Math.max(MuE, fem.colDem[f][kind].M);
+            Pe = Math.max(Pe, fem.colDem[f][kind].Pe);
+          }
+          const Pu2 = Pg2 + Pe;
+          const depth = dir === 'X' ? spec.Bx : spec.Dy;
+          const width = dir === 'X' ? spec.Dy : spec.Bx;
+          const Mu1 = (Pu1 * (1.5 + 0.03 * depth)) / 100; // 最小偏心
+          const beam = beams[dir][zoneIndexOfFloor(seg.startFloor)];
+          let dc1, dc2, scwb = Infinity, curve = null, cap = null;
+          if (isRC) {
+            curve = rcPMCurve(width, depth, seg.zone.fc, seg.zone.fy, state.rebarRatio);
+            dc1 = radialDC(curve.design, Pu1, Mu1);
+            dc2 = radialDC(curve.design, Pu2, MuE);
+            if (seg.startFloor < Z) {
+              const Mnc = mAtP(curve.nominal, Pu2);
+              const MnbTop = rcFlexure(beam.B, beam.D, beam.As, beam.fc, beam.fy);
+              const MnbBot = rcFlexure(beam.B, beam.D, 0.5 * beam.As, beam.fc, beam.fy);
+              const sumMnb = nb === 2 ? MnbTop + MnbBot : MnbTop;
+              scwb = (2 * Mnc) / (1.2 * sumMnb); // ΣMnc ≥ 1.2ΣMnb
+            }
+          } else {
+            cap = ssColumnCapacity(spec, seg.zone.steelFy, seg.storyH, dir);
+            dc1 = ssInteraction(Pu1, Mu1, cap);
+            dc2 = ssInteraction(Pu2, MuE, cap);
+            if (seg.startFloor < Z) {
+              const sumMpc = (2 * cap.Z * Math.max(0, seg.zone.steelFy - (Pu2 * 1000) / spec.Ag)) / 1e5;
+              const sumMpb = (nb * 1.1 * RY_STEEL * beam.fy * beam.Zx) / 1e5;
+              scwb = sumMpc / sumMpb; // ΣM*pc / ΣM*pb ≥ 1.0
+            }
+          }
+          minScwb = Math.min(minScwb, scwb);
+          const govE = dc2 >= dc1;
+          const rec = {
+            dir, dc: Math.max(dc1, dc2), dc1, dc2, Pu1, Mu1, Pu2, MuE,
+            combo: govE ? '1.2D+1.0L+1.0E' : '1.2D+1.6L',
+            Pu: govE ? Pu2 : Pu1, Mu: govE ? MuE : Mu1,
+            curve, cap
+          };
+          if (!worst || rec.dc > worst.dc) worst = rec;
+        }
+        const axialRatio = isRC ? (Pu1 * 1000) / (spec.Bx * spec.Dy * seg.zone.fc) : (Pu1 * 1000) / (spec.Ag * seg.zone.steelFy);
+        return { ...worst, scwb: minScwb, axialRatio, Pu1 };
+      };
+
+      let cols, beams, femX, femY, colChecks, iter, converged = false;
+      for (iter = 1; iter <= MAX_DESIGN_ITER; iter++) {
+        cols = sizeColumns();
+        beams = sizeBeams();
+        const ctx = { Z, cols, beams, segIndexOfFloor, storyF, wE, wu };
+        femX = solveFrame('X', ctx);
+        femY = solveFrame('Y', ctx);
+        let changed = false;
+
+        // (1) 梁：構架分析彎矩包絡 (單調遞增避免振盪)
+        for (const d of ['X', 'Y']) {
+          const fem = d === 'X' ? femX : femY;
+          zones.forEach((z, zi) => {
+            const mu = fem.zoneBeamMu[zi];
+            if (mu > beamMu[d][zi] * 1.01) {
+              beamMu[d][zi] = mu;
+              if (mu > beams[d][zi].phiMn) reasons.add('梁彎矩強度');
+              changed = true;
+            }
+          });
+        }
+
+        // (2) 柱：P-M 與強柱弱梁
+        colChecks = {};
+        for (const code of ['C1', 'C2', 'C3']) {
+          colChecks[code] = segments.map((seg, si) => checkColumn(code, si, cols[code][si], femX, femY, beams));
+          if (colCount[code] === 0) continue;
+          colChecks[code].forEach((chk, si) => {
+            if (chk.dc > 1.0) { colInc[code][si]++; reasons.add('柱 P-M 強度'); changed = true; }
+            else if (chk.scwb < 1.0) { colInc[code][si]++; reasons.add('強柱弱梁'); changed = true; }
+          });
+        }
+
+        // (3) 層間位移角
+        const driftFail = ['X', 'Y'].filter(d => (d === 'X' ? femX : femY).maxDrift > DRIFT_LIMIT);
+        if (driftFail.length) {
+          for (const code of ['C1', 'C2', 'C3']) colInc[code] = colInc[code].map(v => v + 1);
+          driftFail.forEach(d => { beamInc[d] = beamInc[d].map(v => v + 1); });
+          reasons.add('層間位移角');
+          changed = true;
+        }
+
+        if (!changed) { converged = true; break; }
+      }
+      if (iter > MAX_DESIGN_ITER) iter = MAX_DESIGN_ITER;
+
+      // 小梁 (重力控制)
+      const zone1 = zones[0];
+      let subBeam = null;
+      if (div > 1) {
+        subBeam = isRC ? sizeRCBeam(Lmin, MuSub, false, zone1, 0) : sizeSSBeam(Lmin, MuSub, false, zone1, 0);
+      }
+
+      // 6. 構件表
+      const members = [];
+      const ok = b => (b ? '✓' : '✗');
+      for (const code of ['C1', 'C2', 'C3']) {
+        if (colCount[code] === 0) continue;
+        segments.forEach((seg, si) => {
+          const spec = cols[code][si];
+          const chk = colChecks[code][si];
+          spec.axialRatio = chk.axialRatio;
+          const n = Z - seg.startFloor + 1;
+          const matSpec = isRC ? `f'c=${seg.zone.fc} / H=${seg.storyH.toFixed(1)}m` : `Fy=${seg.zone.steelFy} / H=${seg.storyH.toFixed(1)}m`;
+          const scwbTxt = Number.isFinite(chk.scwb) ? ` · 強柱弱梁 ${chk.scwb.toFixed(2)} ${ok(chk.scwb >= 1.0)}` : '';
+          members.push({
+            id: `${code} ${colNames[code]} (${seg.label})`,
+            matInfo: `${matSpec} (承載 ${n} 層 × ${colCount[code]} 支)`,
+            force: `Pu=${chk.Pu.toFixed(0)} tf / Mu=${chk.Mu.toFixed(1)} tf·m (${chk.dir}向, ${chk.combo})`,
+            size: spec.label,
+            note: `P-M D/C=${chk.dc.toFixed(2)} ${ok(chk.dc <= 1.0)}${scwbTxt} · ` +
+              (isRC ? `軸壓比 ${chk.axialRatio.toFixed(2)}` : `Pu/Py ${chk.axialRatio.toFixed(2)} · ${spec.weight} kg/m`),
+            pass: chk.dc <= 1.0 && chk.scwb >= 1.0
+          });
+        });
+      }
+      zones.forEach((z, zi) => {
+        const zRange = z.startFloor === z.endFloor ? `${z.startFloor}F` : `${z.startFloor}F~${z.endFloor}F`;
+        const matLabel = isRC ? `f'c=${z.fc} kgf/cm²` : `Fy=${z.steelFy} kgf/cm²`;
+        for (const d of ['X', 'Y']) {
+          const b = beams[d][zi];
+          const span = d === 'X' ? Lx : Ly;
+          const pass = b.phiMn >= b.Mu - 1e-6;
+          members.push({
+            id: `G${d.toLowerCase()} ${d}向大梁 (${zRange})`,
+            matInfo: `${matLabel} · 跨度 L${d.toLowerCase()}=${span.toFixed(1)}m`,
+            force: `Mu = ${b.Mu.toFixed(1)} tf·m`,
+            size: b.label,
+            note: `φMn=${b.phiMn.toFixed(1)} ${ok(pass)}` +
+              (isRC ? ` · ρ需=${(b.rho * 100).toFixed(2)}%` : '') + ` · L/d=${b.ratio}`,
+            pass
+          });
+        }
+      });
+      if (subBeam) {
+        members.push({
+          id: `B1 小梁 / S1 樓板 (全棟)`,
+          matInfo: `小梁跨 ${Lmin.toFixed(1)}m · 間距 ${subSpacing.toFixed(2)}m`,
+          force: `Mu = ${MuSub.toFixed(1)} tf·m`,
+          size: `小梁 ${subBeam.label} / 版厚 ${slabThick} cm`,
+          note: `φMn=${subBeam.phiMn.toFixed(1)} ${ok(subBeam.phiMn >= MuSub)} · 版 ${panelS.toFixed(1)}×${panelL.toFixed(1)}m`,
+          pass: subBeam.phiMn >= MuSub
+        });
+      } else {
+        members.push({
+          id: `S1 樓板 (全棟，不設小梁)`,
+          matInfo: `版 ${panelS.toFixed(1)}×${panelL.toFixed(1)}m`,
+          force: `wu = ${Math.round(wu)} kgf/m²`,
+          size: `版厚 ${slabThick} cm`,
+          note: `雙向版 t ≥ 周長/180`,
+          pass: true
+        });
+      }
+
+      // 7. 數量概估 (由構件尺寸累計；不含基礎、地下室、剪力牆、樓梯)
+      let concM3 = 0, steelKg = 0;
+      const nGx = Nx * (Ny + 1), nGy = Ny * (Nx + 1);
+      const nSub = div > 1 ? Nx * Ny * (div - 1) : 0;
+      for (let f = 1; f <= Z; f++) {
+        const si = segIndexOfFloor(f);
+        const zi = zoneIndexOfFloor(f);
+        const h = getStoryHeight(f);
+        const gx = beams.X[zi], gy = beams.Y[zi];
+        if (isRC) {
+          let colVol = 0;
+          for (const code of ['C1', 'C2', 'C3']) {
+            const s2 = cols[code][si];
+            colVol += colCount[code] * (s2.Bx / 100) * (s2.Dy / 100) * h;
+          }
+          const cw = cols.C2[si].Bx / 100;
+          const beamVol = (b, len, n) => n * (b.B / 100) * ((b.D - slabThick) / 100) * Math.max(0.5, len - cw);
+          const beamSteel = (b, len, n) => n * ((b.As * 1.7) / 1e4 + 0.006 * (b.B / 100) * (b.D / 100)) * Math.max(0.5, len - cw);
+          const slabVol = floorArea * (slabThick / 100);
+          let bVol = beamVol(gx, Lx, nGx) + beamVol(gy, Ly, nGy);
+          let bSteel = beamSteel(gx, Lx, nGx) + beamSteel(gy, Ly, nGy);
+          if (subBeam) { bVol += beamVol(subBeam, Lmin, nSub); bSteel += beamSteel(subBeam, Lmin, nSub); }
+          concM3 += colVol + bVol + slabVol;
+          steelKg += (colVol * (state.rebarRatio + 0.012) + bSteel + slabVol * 0.012) * 7850 * 1.08;
+        } else {
+          let kg = 0;
+          for (const code of ['C1', 'C2', 'C3']) kg += colCount[code] * cols[code][si].weight * h;
+          kg += gx.weight * Lx * nGx + gy.weight * Ly * nGy;
+          if (subBeam) kg += subBeam.weight * Lmin * nSub;
+          steelKg += kg * 1.10; // 接頭、加勁板
+          concM3 += floorArea * (slabThick / 100) * 0.85;
+        }
+      }
+      const concreteUnitM3 = +(concM3 / totalGFA).toFixed(2);
+      const steelUnitKg = Math.round(steelKg / totalGFA);
+
+      // 8. 顯示用：1F 柱 P-M (目前選取方向)
+      const pmCode = colCount.C1 > 0 ? 'C1' : 'C2';
+      const pmSpec = cols[pmCode][0];
+      const pmChkAll = colChecks[pmCode][0];
+      const pmSeg = segments[0];
+      const dirSel = state.femDir;
+      const femSel = dirSel === 'X' ? femX : femY;
+      const pmKind = pmCode === 'C1' && femSel.nCols > 2 ? 'int' : 'end';
+      let pmMuE = 0, pmPe = 0;
+      for (let f = pmSeg.startFloor; f <= pmSeg.endFloor; f++) {
+        pmMuE = Math.max(pmMuE, femSel.colDem[f][pmKind].M);
+        pmPe = Math.max(pmPe, femSel.colDem[f][pmKind].Pe);
+      }
+      const nAll = Z;
+      const pmPu1 = (wu * At[pmCode] * nAll) / 1000;
+      const pmPu2 = (wE * At[pmCode] * nAll) / 1000 + pmPe;
+      const pmDepth = dirSel === 'X' ? pmSpec.Bx : pmSpec.Dy;
+      const pmWidth = dirSel === 'X' ? pmSpec.Dy : pmSpec.Bx;
+      const pmMu1 = (pmPu1 * (1.5 + 0.03 * pmDepth)) / 100;
+      let pmResult;
+      if (isRC) {
+        const curve = rcPMCurve(pmWidth, pmDepth, pmSeg.zone.fc, pmSeg.zone.fy, state.rebarRatio);
+        const dc1 = radialDC(curve.design, pmPu1, pmMu1);
+        const dc2 = radialDC(curve.design, pmPu2, pmMuE);
+        const gE = dc2 >= dc1;
+        pmResult = {
+          points: curve.design, phiPnMax: curve.phiPnMax, phiPb: curve.phiPb, phiMb: curve.phiMb, phiMn0: curve.phiMn0,
+          PuDemandTf: gE ? pmPu2 : pmPu1, MuDemandTfm: gE ? pmMuE : pmMu1,
+          combo: gE ? '1.2D+1.0L+1.0E' : '1.2D+1.6L', dcRatio: Math.max(dc1, dc2), colCode: pmCode
+        };
+      } else {
+        const cap = ssColumnCapacity(pmSpec, pmSeg.zone.steelFy, pmSeg.storyH, dirSel);
+        const dc1 = ssInteraction(pmPu1, pmMu1, cap);
+        const dc2 = ssInteraction(pmPu2, pmMuE, cap);
+        const gE = dc2 >= dc1;
+        pmResult = {
+          points: [{ M: 0, P: cap.Pc }, { M: 0.9 * cap.Mc, P: 0.2 * cap.Pc }, { M: cap.Mc, P: 0 }],
+          phiPnMax: cap.Pc, phiPb: 0.2 * cap.Pc, phiMb: 0.9 * cap.Mc, phiMn0: cap.Mc,
+          PuDemandTf: gE ? pmPu2 : pmPu1, MuDemandTfm: gE ? pmMuE : pmMu1,
+          combo: gE ? '1.2D+1.0L+1.0E' : '1.2D+1.6L', dcRatio: Math.max(dc1, dc2), colCode: pmCode
+        };
+      }
+      pmResult.dcRatio = Math.max(pmResult.dcRatio, 0);
+
+      const allPass = members.every(m => m.pass) && femX.maxDrift <= DRIFT_LIMIT && femY.maxDrift <= DRIFT_LIMIT;
+
+      const result = {
+        Z, H1, H, totalHeight, Nx, Lx, Ny, Ly, totalWidthX, totalLengthY, floorArea, totalGFA,
+        slabThick, panelS, panelL, DL, LL, wu, wE, wSeismic,
+        totalWeightTf, seis, periodT: seis.T, baseShearCoeff: seis.C, baseShearTf, storyF, Ft,
+        At_C1: At[pmCode], At,
+        colC1Spec: cols[pmCode][0], colPmCode: pmCode,
+        girderGxSpec: beams.X[0], girderGySpec: beams.Y[0],
+        subBeamSpec: subBeam || { label: '不設' },
+        members, cols, beams, colChecks, segments,
+        concreteUnitM3, steelUnitKg,
+        femX, femY, femResult: femSel, pmResult,
+        design: { iter, converged, reasons: [...reasons], allPass }
+      };
+      state.lastResult = result;
+      return result;
+    }
+
+
+    // =========================================================================
+    // 6. Canvas 繪圖引擎 (支援矩形柱長寬比例呈現與 1F 挑高呈現)
+    // =========================================================================
+    function setupHiDPICanvas(canvas) {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(260, rect.width);
+      const h = Math.max(140, rect.height);
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, w, h };
+    }
+
+    function drawPlanCanvas(res) {
+      const canvas = document.getElementById('canvasPlan');
+      if (!canvas) return;
+      const { ctx, w, h } = setupHiDPICanvas(canvas);
+      ctx.clearRect(0, 0, w, h);
+
+      const pad = 42;
+      const availW = w - pad * 2;
+      const availH = h - pad * 2;
+      const scale = Math.min(availW / res.totalWidthX, availH / res.totalLengthY);
+
+      const drawW = res.totalWidthX * scale;
+      const drawH = res.totalLengthY * scale;
+      const ox = (w - drawW) / 2;
+      const oy = (h - drawH) / 2;
+
+      // 繪製內柱受荷面積示意
+      const targetColX = res.Nx >= 2 ? 1 : 0;
+      const targetColY = res.Ny >= 2 ? 1 : 0;
+      const tx0 = ox + Math.max(0, targetColX - 0.5) * res.Lx * scale;
+      const tx1 = ox + Math.min(res.Nx, targetColX + 0.5) * res.Lx * scale;
+      const ty0 = oy + Math.max(0, targetColY - 0.5) * res.Ly * scale;
+      const ty1 = oy + Math.min(res.Ny, targetColY + 0.5) * res.Ly * scale;
+
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.14)';
+      ctx.strokeStyle = 'rgba(96, 165, 250, 0.5)';
+      ctx.setLineDash([4, 4]);
+      ctx.fillRect(tx0, ty0, tx1 - tx0, ty1 - ty0);
+      ctx.strokeRect(tx0, ty0, tx1 - tx0, ty1 - ty0);
+      ctx.setLineDash([]);
+
+      // 繪製次小梁
+      if (state.subBeamDiv > 1) {
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1.2;
+        for (let ix = 0; ix < res.Nx; ix++) {
+          for (let k = 1; k < state.subBeamDiv; k++) {
+            const x = ox + (ix + k / state.subBeamDiv) * res.Lx * scale;
+            ctx.beginPath();
+            ctx.moveTo(x, oy);
+            ctx.lineTo(x, oy + drawH);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // 繪製主大梁格網
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 2.5;
+      for (let ix = 0; ix <= res.Nx; ix++) {
+        const x = ox + ix * res.Lx * scale;
+        ctx.beginPath();
+        ctx.moveTo(x, oy);
+        ctx.lineTo(x, oy + drawH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`X${ix + 1}`, x, oy - 14);
+      }
+
+      for (let iy = 0; iy <= res.Ny; iy++) {
+        const y = oy + iy * res.Ly * scale;
+        ctx.beginPath();
+        ctx.moveTo(ox, y);
+        ctx.lineTo(ox + drawW, y);
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px Inter, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`Y${iy + 1}`, ox - 12, y + 4);
+      }
+
+      // 繪製柱位 (真實呈現 Bx × Dy 矩形長寬比)
+      const ratioXY = res.colC1Spec.Bx / Math.max(1, res.colC1Spec.Dy);
+      const basePx = Math.max(9, Math.min(16, ((res.colC1Spec.Bx + res.colC1Spec.Dy) / 200) * scale * 2.2));
+      const colWx = Math.max(7, Math.min(24, basePx * Math.sqrt(ratioXY)));
+      const colHy = Math.max(7, Math.min(24, basePx / Math.sqrt(ratioXY)));
+
+      for (let ix = 0; ix <= res.Nx; ix++) {
+        for (let iy = 0; iy <= res.Ny; iy++) {
+          const x = ox + ix * res.Lx * scale;
+          const y = oy + iy * res.Ly * scale;
+          const isEdgeX = ix === 0 || ix === res.Nx;
+          const isEdgeY = iy === 0 || iy === res.Ny;
+          if (isEdgeX && isEdgeY) {
+            ctx.fillStyle = '#10b981';
+          } else if (isEdgeX || isEdgeY) {
+            ctx.fillStyle = '#f59e0b';
+          } else {
+            ctx.fillStyle = '#f43f5e';
+          }
+          ctx.fillRect(x - colWx / 2, y - colHy / 2, colWx, colHy);
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x - colWx / 2, y - colHy / 2, colWx, colHy);
+        }
+      }
+
+      // 標註尺寸
+      ctx.fillStyle = '#38bdf8';
+      ctx.font = '11px JetBrains Mono, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`X向: ${res.Nx}跨 × ${res.Lx.toFixed(1)}m = ${res.totalWidthX.toFixed(1)}m`, ox + drawW / 2, oy + drawH + 22);
+
+      ctx.save();
+      ctx.translate(ox + drawW + 20, oy + drawH / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.fillText(`Y向: ${res.Ny}跨 × ${res.Ly.toFixed(1)}m = ${res.totalLengthY.toFixed(1)}m`, 0, 0);
+      ctx.restore();
+    }
+
+    function draw3DWireframe(res) {
+      const canvas = document.getElementById('canvas3D');
+      if (!canvas) return;
+      const { ctx, w, h } = setupHiDPICanvas(canvas);
+      ctx.clearRect(0, 0, w, h);
+
+      const totalH = res.totalHeight;
+      const maxDim = Math.max(res.totalWidthX, res.totalLengthY, totalH * 1.15);
+      const scale = Math.min(w, h) / (maxDim * 1.42);
+
+      const cx = w * 0.5;
+      const cy = h * 0.82;
+
+      const project = (x, y, z) => {
+        const px = (x - res.totalWidthX / 2) * scale;
+        const py = (y - res.totalLengthY / 2) * scale;
+        const pz = z * scale;
+        const isoX = cx + (px - py) * 0.82;
+        const isoY = cy + (px + py) * 0.34 - pz;
+        return { x: isoX, y: isoY };
+      };
+
+      // 繪製柱線 (依分層材料區段變色)
+      const zoneColors = ['#38bdf8', '#f59e0b', '#a855f7', '#34d399'];
+      let zBot = 0;
+      for (let f = 1; f <= res.Z; f++) {
+        const zTop = zBot + getStoryHeight(f);
+        let zIdx = 0;
+        for (let i = 0; i < state.materialZones.length; i++) {
+          if (f >= state.materialZones[i].startFloor) zIdx = i;
+        }
+        ctx.strokeStyle = zoneColors[zIdx % zoneColors.length];
+        ctx.lineWidth = 1.3;
+        for (let ix = 0; ix <= res.Nx; ix++) {
+          for (let iy = 0; iy <= res.Ny; iy++) {
+            const pBot = project(ix * res.Lx, iy * res.Ly, zBot);
+            const pTop = project(ix * res.Lx, iy * res.Ly, zTop);
+            ctx.beginPath();
+            ctx.moveTo(pBot.x, pBot.y);
+            ctx.lineTo(pTop.x, pTop.y);
+            ctx.stroke();
+          }
+        }
+        zBot = zTop;
+      }
+
+      // 繪製樓層水平網格
+      let zCum = 0;
+      for (let f = 1; f <= res.Z; f++) {
+        zCum += getStoryHeight(f);
+        ctx.strokeStyle = f === res.Z ? '#34d399' : 'rgba(148, 163, 184, 0.55)';
+        ctx.lineWidth = f === res.Z ? 1.4 : 0.8;
+
+        for (let ix = 0; ix <= res.Nx; ix++) {
+          const p1 = project(ix * res.Lx, 0, zCum);
+          const p2 = project(ix * res.Lx, res.totalLengthY, zCum);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+        for (let iy = 0; iy <= res.Ny; iy++) {
+          const p1 = project(0, iy * res.Ly, zCum);
+          const p2 = project(res.totalWidthX, iy * res.Ly, zCum);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      }
+
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '11px Inter, sans-serif';
+      const hInfo = res.Z > 1 ? `1F:${res.H1.toFixed(1)}m / 標準:${res.H.toFixed(1)}m` : `1F:${res.H1.toFixed(1)}m`;
+      ctx.fillText(`總高 ${totalH.toFixed(1)}m (${res.Z}F · ${hInfo})`, 8, 15);
+    }
+
+    function drawFEMCanvas(res) {
+      const canvas = document.getElementById('canvasFEM');
+      if (!canvas) return;
+      const { ctx, w, h } = setupHiDPICanvas(canvas);
+      ctx.clearRect(0, 0, w, h);
+
+      const fem = res.femResult;
+      const bays = state.femDir === 'X' ? res.Nx : res.Ny;
+      const span = state.femDir === 'X' ? res.Lx : res.Ly;
+      const frameW = bays * span;
+      const frameH = res.totalHeight;
+
+      const pad = 44;
+      const scale = Math.min((w - pad * 2) / Math.max(1, frameW), (h - pad * 2) / Math.max(1, frameH));
+      const ox = (w - frameW * scale) / 2;
+      const oy = h - pad;
+
+      const toScreen = (x, y) => ({
+        x: ox + x * scale,
+        y: oy - y * scale
+      });
+
+      for (let c = 0; c <= bays; c++) {
+        const p = toScreen(c * span, 0);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(p.x - 10, p.y, 20, 5);
+      }
+
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1.8;
+      for (const el of fem.elements) {
+        const n1 = fem.nodes[el.n1];
+        const n2 = fem.nodes[el.n2];
+        const p1 = toScreen(n1.x, n1.y);
+        const p2 = toScreen(n2.x, n2.y);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+
+      if (state.femDiagram === 'BMD') {
+        const maxM = Math.max(1, fem.maxBeamMoment);
+        const mScale = (span * scale * 0.25) / maxM;
+
+        for (const el of fem.elements) {
+          if (el.type === 'beam') {
+            const n1 = fem.nodes[el.n1];
+            const n2 = fem.nodes[el.n2];
+            const p1 = toScreen(n1.x, n1.y);
+            const p2 = toScreen(n2.x, n2.y);
+            const y1 = p1.y - Math.abs(el.M1) * mScale;
+            const yMid = p1.y + Math.abs(el.Mmid) * mScale;
+            const y2 = p2.y - Math.abs(el.M2) * mScale;
+
+            ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p1.x, y1);
+            ctx.quadraticCurveTo((p1.x + p2.x) / 2, yMid * 1.35 - p1.y * 0.35, p2.x, y2);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            if (el.lvl === 1 && el.bay === 0) {
+              ctx.fillStyle = '#fbbf24';
+              ctx.font = '10px monospace';
+              ctx.fillText(`-${Math.abs(el.M2).toFixed(1)}`, p2.x - 24, y2 - 4);
+            }
+          }
+        }
+      } else if (state.femDiagram === 'AFD') {
+        const maxP = Math.max(1, fem.maxColAxial);
+        const pScale = (span * scale * 0.22) / maxP;
+        for (const el of fem.elements) {
+          if (el.type === 'col') {
+            const n1 = fem.nodes[el.n1];
+            const n2 = fem.nodes[el.n2];
+            const p1 = toScreen(n1.x, n1.y);
+            const p2 = toScreen(n2.x, n2.y);
+            const wBar = Math.abs(el.Axial) * pScale;
+
+            ctx.fillStyle = 'rgba(244, 63, 94, 0.25)';
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 1.4;
+            ctx.fillRect(p2.x, p2.y, wBar, p1.y - p2.y);
+            ctx.strokeRect(p2.x, p2.y, wBar, p1.y - p2.y);
+
+            if (el.lvl === 1) {
+              ctx.fillStyle = '#fda4af';
+              ctx.font = '10px monospace';
+              ctx.fillText(`${Math.abs(el.Axial).toFixed(0)}t`, p2.x + 3, (p1.y + p2.y) / 2 + 3);
+            }
+          }
+        }
+      } else if (state.femDiagram === 'DEF') {
+        let maxU = 1e-5;
+        for (let i = 0; i < fem.nodes.length; i++) {
+          maxU = Math.max(maxU, Math.abs(fem.uGlobal[i * 3]));
+        }
+        const dispMag = (span * 0.22) / maxU;
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 2.2;
+        for (const el of fem.elements) {
+          const n1 = fem.nodes[el.n1];
+          const n2 = fem.nodes[el.n2];
+          const u1 = fem.uGlobal[el.n1 * 3] * dispMag;
+          const v1 = fem.uGlobal[el.n1 * 3 + 1] * dispMag;
+          const u2 = fem.uGlobal[el.n2 * 3] * dispMag;
+          const v2 = fem.uGlobal[el.n2 * 3 + 1] * dispMag;
+          const p1 = toScreen(n1.x + u1, n1.y + v1);
+          const p2 = toScreen(n2.x + u2, n2.y + v2);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawPMCanvas(res) {
+      const canvas = document.getElementById('canvasPM');
+      if (!canvas) return;
+      const { ctx, w, h } = setupHiDPICanvas(canvas);
+      ctx.clearRect(0, 0, w, h);
+
+      const pm = res.pmResult;
+      const padL = 56, padR = 28, padT = 24, padB = 38;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+
+      const maxM = Math.max(pm.MuDemandTfm, ...pm.points.map(p => p.M)) * 1.25;
+      const maxP = Math.max(pm.phiPnMax, pm.PuDemandTf) * 1.20;
+
+      const toX = m => padL + (m / maxM) * plotW;
+      const toY = p => padT + plotH - (p / maxP) * plotH;
+
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= 4; i++) {
+        const y = padT + (plotH * i) / 4;
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+        const x = padL + (plotW * i) / 4;
+        ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(padL, padT);
+      ctx.lineTo(padL, padT + plotH);
+      ctx.lineTo(padL + plotW, padT + plotH);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.16)';
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(toX(0), toY(0));
+      for (const pt of pm.points) {
+        ctx.lineTo(toX(pt.M), toY(pt.P));
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      for (let i = 0; i < pm.points.length; i++) {
+        const pt = pm.points[i];
+        if (i === 0) ctx.moveTo(toX(pt.M), toY(pt.P));
+        else ctx.lineTo(toX(pt.M), toY(pt.P));
+      }
+      ctx.stroke();
+
+      const dx = toX(pm.MuDemandTfm);
+      const dy = toY(pm.PuDemandTf);
+      ctx.fillStyle = '#f43f5e';
+      ctx.beginPath();
+      ctx.arc(dx, dy, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = '#fda4af';
+      ctx.font = '11px monospace';
+      ctx.fillText(`需求 (${pm.MuDemandTfm.toFixed(1)} tf·m, ${pm.PuDemandTf.toFixed(1)} tf)`, Math.min(w - 195, dx + 10), Math.max(20, dy - 8));
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px Inter, sans-serif';
+      ctx.fillText('設計軸力 φPn (tf)', 12, 16);
+      ctx.fillText(`設計彎矩 φMn,${state.femDir} (tf·m)`, w - 140, h - 10);
+    }
+
+    // =========================================================================
+    // 7. 生成 Markdown 工程計算書
+    // =========================================================================
+    function generateHandcalcsMarkdown(res) {
+      const s = res.seis;
+      const lim = DRIFT_LIMIT * 1000;
+      const driftTxt = v => `${v.toFixed(2)} ‰ ${v <= lim + 1e-9 ? `≤ ${lim.toFixed(1)} ‰ ✓` : `> ${lim.toFixed(1)} ‰ ✗ 不合格`}`;
+      const zoneLines = state.materialZones.map((z, idx) => {
+        const r = z.startFloor === z.endFloor ? `${z.startFloor}F` : `${z.startFloor}F~${z.endFloor}F`;
+        return state.structType === 'RC'
+          ? `  - 區段 ${idx + 1} (${r})：混凝土 f'c = ${z.fc} kgf/cm²，鋼筋 fy = ${z.fy} kgf/cm²`
+          : `  - 區段 ${idx + 1} (${r})：結構鋼材 Fy = ${z.steelFy} kgf/cm² (${state.colShape} 柱)`;
+      }).join('\n');
+      const memberRows = res.members.map(m => `| ${m.id} | ${m.matInfo} | ${m.force} | **${m.size}** | ${m.note} |`).join('\n');
+      const d = res.design;
+      const designTxt = d.converged
+        ? `經 ${d.iter} 次迭代收斂${d.reasons.length ? `；斷面曾因「${d.reasons.join('、')}」放大` : '；初估斷面即滿足各項檢核'}`
+        : `迭代 ${d.iter} 次仍未收斂（${d.reasons.join('、')}），請調整柱距、材料強度或結構系統`;
+      const pm = res.pmResult;
+
+      return `# 建築結構初步尺寸與構架靜力速算書
+
+## 1. 建築幾何與柱網
+- 樓層與高度：地上 Z = ${res.Z} 層，1F 樓高 H1 = ${res.H1.toFixed(1)} m，標準層高 H = ${res.H.toFixed(1)} m，總高 hn = ${res.totalHeight.toFixed(1)} m
+- 柱網：X 向 ${res.Nx} 跨 × ${res.Lx.toFixed(1)} m = ${res.totalWidthX.toFixed(1)} m；Y 向 ${res.Ny} 跨 × ${res.Ly.toFixed(1)} m = ${res.totalLengthY.toFixed(1)} m
+- 面積：單層 ${res.floorArea.toFixed(1)} m²，總樓地板面積 GFA = ${res.totalGFA.toFixed(1)} m² (${(res.totalGFA * 0.3025).toFixed(1)} 坪)
+- 分層材料規格 (${state.structType})：
+${zoneLines}
+
+## 2. 載重
+- 靜載重 DL = ${res.DL} kgf/m²（版厚 ${res.slabThick} cm、梁柱自重估計值、附加靜載 SDL = ${state.sdl} kgf/m²）
+- 活載重 LL = ${res.LL} kgf/m²
+- 重力組合 wu = 1.2DL + 1.6LL = ${Math.round(res.wu)} kgf/m²
+- 地震組合 1.2DL + 1.0LL + 1.0E，其中重力部分 = ${Math.round(res.wE)} kgf/m²
+- 地震有效重量 W = ${Math.round(res.wSeismic)} kgf/m² × ${res.totalGFA.toFixed(1)} m² = ${res.totalWeightTf.toFixed(1)} tf（${state.occupancy === 'storage_heavy' ? '倉儲類，含 25% 活載重' : '僅計靜載重'}）
+
+## 3. 設計地震力（建築物耐震設計規範，靜力分析法）
+- 工址參數：SDS = ${state.sds.toFixed(2)}，SD1 = ${state.sd1.toFixed(2)}，T0D = SD1/SDS = ${s.T0.toFixed(3)} s（請以 NCREE 查詢結果覆核：https://seaport.ncree.org/sederes/ ）
+- 基本振動週期：T = ${s.Ct.toFixed(3)} × hn^0.75 = ${s.Ct.toFixed(3)} × ${res.totalHeight.toFixed(1)}^0.75 = ${s.T.toFixed(3)} s
+- 設計譜加速度：${s.saCase}，SaD = ${s.SaD.toFixed(3)} g
+- 結構系統：R = ${state.Rsys.toFixed(1)}，Ra = 1 + (R − 1)/1.5 = ${s.Ra.toFixed(3)}，Fu = ${s.Fu.toFixed(3)}
+- 修正係數：SaD/Fu = ${s.ratio.toFixed(4)} → (SaD/Fu)m = ${s.ratioM.toFixed(4)}
+- 設計地震力：V = I/(1.4αy) × (SaD/Fu)m × W = ${state.importanceI.toFixed(2)}/(1.4 × ${state.alphaY.toFixed(2)}) × ${s.ratioM.toFixed(4)} = ${s.Cmain.toFixed(4)} W
+- 中小度地震：V* = I·Fu/(4.2αy) × (SaD/Fu)m × W = ${s.Cstar.toFixed(4)} W
+- 採用：V = ${s.C.toFixed(4)} × ${res.totalWeightTf.toFixed(1)} = ${res.baseShearTf.toFixed(1)} tf（${s.governs}控制）
+- 豎向分配：Ft = ${res.Ft.toFixed(1)} tf（T > 0.7 s 時 Ft = 0.07TV ≤ 0.25V），Fx = (V − Ft)·wx·hx / Σwi·hi
+- 未納入：最大考量地震 VM（需 SMS / SM1）、意外扭矩、垂直地震力、P-Δ 效應
+
+## 4. 分層構件尺寸一覽
+| 構件與樓層區段 | 材料 / 樓高 | 設計內力 | 建議斷面 (Bx×Dy) | 檢核 |
+| :--- | :--- | :--- | :--- | :--- |
+${memberRows}
+
+## 5. 構架分析與檢核
+- 分析模型：X、Y 向各取代表內構架（端柱 C2、內柱 C1），重力與地震分開求解後疊加；地震力由各向 ${res.femX.numFrames} / ${res.femY.numFrames} 榀構架均分
+- 有效勁度：柱 0.70Ig；${state.structType === 'RC' ? '梁 0.35Ig × 1.5（T 型梁翼版）' : '鋼梁 Ix × 1.2（合成作用）'}；梁柱接頭剛域未計
+- 層間位移角（設計地震力作用下）：X 向 ${driftTxt(res.femX.maxDriftPermille)}；Y 向 ${driftTxt(res.femY.maxDriftPermille)}
+- 柱強度：${state.structType === 'RC' ? `RC 應變諧和法 P-M 曲線（εcu = 0.003，主筋 ρg = ${(state.rebarRatio * 100).toFixed(1)}% 周邊均佈，φ = 0.65～0.90）` : 'AISC H1 互制式（Pc = 0.9FcrAg，K = 1.0；Mc = 0.9ZFy）'}，檢核 1.2D+1.6L（最小偏心）與 1.2D+1.0L+1.0E
+- 強柱弱梁：${state.structType === 'RC' ? 'ΣMnc ≥ 1.2ΣMnb' : 'ΣM*pc ≥ ΣM*pb（M*pb = 1.1RyFyZb）'}
+- 1F ${pm.colCode} 柱（${state.femDir} 向）：φPn,max = ${pm.phiPnMax.toFixed(1)} tf，需求 (Pu, Mu) = (${pm.PuDemandTf.toFixed(1)} tf, ${pm.MuDemandTfm.toFixed(1)} tf·m)，${pm.combo}，D/C = ${pm.dcRatio.toFixed(2)}
+- 設計迭代：${designTxt}
+
+## 6. 結構材料數量概估（依上列構件尺寸累計）
+- 混凝土：${res.concreteUnitM3.toFixed(2)} m³/m²（全棟約 ${Math.round(res.concreteUnitM3 * res.totalGFA)} m³）
+- ${state.structType === 'RC' ? '鋼筋' : '結構鋼骨'}：${res.steelUnitKg} kgf/m²（全棟約 ${((res.steelUnitKg * res.totalGFA) / 1000).toFixed(1)} tf）
+- 不含：基礎、地下室、剪力牆、樓梯、外牆、女兒牆；${state.structType === 'RC' ? '柱主筋 ρg + 箍筋 1.2%、梁主筋 1.7As + 箍筋 0.6%、版筋 1.2%、搭接損耗 8%' : '鋼骨含接頭加勁 10%，不含鋼承板'}
+
+## 7. 適用範圍
+- 本計算為方案初期概估：規則柱網、等跨、無剪力牆、樓板為剛性隔板
+- 正式設計須由結構技師依現行規範以立體模型分析並辦理簽證`;
+    }
+
+
+    // =========================================================================
+    // 8. UI 更新與事件綁定
+    // =========================================================================
+    function renderAll() {
+      const res = computeStructuralDesign();
+
+      // 控制標準層樓高滑桿顯示 (當 Z > 1 時顯示，Z === 1 時淡化禁用)
+      const wrapStdH = document.getElementById('wrapStdStoryHeight');
+      const inpStdH = document.getElementById('inpStoryHeight');
+      if (state.floors <= 1) {
+        wrapStdH.classList.add('opacity-40');
+        inpStdH.disabled = true;
+      } else {
+        wrapStdH.classList.remove('opacity-40');
+        inpStdH.disabled = false;
+      }
+
+      document.getElementById('valFloors').textContent = `${state.floors} 樓`;
+      document.getElementById('valFirstStoryHeight').textContent = `${state.firstStoryHeight.toFixed(1)} m`;
+      document.getElementById('valStoryHeight').textContent = `${state.storyHeight.toFixed(1)} m`;
+      document.getElementById('valBaysX').textContent = `${state.baysX} 跨`;
+      document.getElementById('valSpanX').textContent = `${state.spanX.toFixed(1)} m`;
+      document.getElementById('valBaysY').textContent = `${state.baysY} 跨`;
+      document.getElementById('valSpanY').textContent = `${state.spanY.toFixed(1)} m`;
+      document.getElementById('txtTotalAreaSummary').textContent = `單層 ${res.floorArea.toFixed(0)} m² · 總計 ${res.totalGFA.toFixed(0)} m²`;
+      document.getElementById('txtSeismicBaseCoeff').textContent = `V = ${res.baseShearCoeff.toFixed(3)} W (T=${res.periodT.toFixed(2)}s · ${res.seis.governs})`;
+
+      const badge = document.getElementById('badgeStructType');
+      const zCount = state.materialZones.length;
+      if (state.structType === 'RC') {
+        badge.textContent = `RC 鋼筋混凝土 (${zCount}段材料)`;
+        badge.className = 'text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium';
+      } else {
+        badge.textContent = `SS 鋼骨結構 (${zCount}段材料)`;
+        badge.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium';
+      }
+
+      // Top KPI Cards
+      document.getElementById('kpiColSize').textContent = res.colC1Spec.label;
+      document.getElementById('kpiColSub').textContent = `${res.colPmCode} 受荷 ${res.At_C1.toFixed(1)} m² · 1F 軸壓比 ${res.colC1Spec.axialRatio.toFixed(2)}`;
+      document.getElementById('kpiGirderSize').textContent = state.structType === 'RC'
+        ? `Gx ${res.girderGxSpec.B}×${res.girderGxSpec.D} / Gy ${res.girderGySpec.B}×${res.girderGySpec.D}`
+        : `${res.girderGxSpec.label}`;
+      document.getElementById('kpiGirderSub').textContent = `跨度 Lx=${res.Lx.toFixed(1)}m / Ly=${res.Ly.toFixed(1)}m`;
+      document.getElementById('kpiSubBeamSlab').textContent = `${res.subBeamSpec.label} / ${res.slabThick}cm`;
+      document.getElementById('kpiSubBeamSub').textContent = `極限設計載重 wu = ${Math.round(res.wu)} kgf/m²`;
+      document.getElementById('kpiBaseShear').textContent = `${res.baseShearTf.toFixed(1)} tf`;
+      document.getElementById('kpiTotalWeight').textContent = `有效總重 W = ${res.totalWeightTf.toFixed(0)} tf`;
+
+      // BoQ
+      document.getElementById('boqGFA').textContent = `${res.totalGFA.toFixed(1)} m² (${(res.totalGFA * 0.3025).toFixed(1)} 坪)`;
+      document.getElementById('boqConcreteUnit').textContent = `${res.concreteUnitM3.toFixed(2)} m³/m² (總計 ${Math.round(res.concreteUnitM3 * res.totalGFA)} m³)`;
+      document.getElementById('lblSteelUnit').textContent = state.structType === 'RC' ? '鋼筋單位用量指標：' : '鋼骨單位重量指標：';
+      document.getElementById('boqSteelUnit').textContent = `${res.steelUnitKg} kgf/m² (總計 ${((res.steelUnitKg * res.totalGFA) / 1000).toFixed(1)} tf)`;
+
+      // Populate Segmented Member Table
+      const tbody = document.getElementById('tbodyMembers');
+      tbody.innerHTML = res.members.map(m => {
+        const isC1 = m.id.startsWith('C1');
+        const isBeam = m.id.startsWith('Gx') || m.id.startsWith('Gy') || m.id.startsWith('B1');
+        const idColor = isC1 ? 'text-rose-300' : (isBeam ? 'text-emerald-300' : 'text-white');
+        return `
+          <tr class="hover:bg-slate-900/60 transition">
+            <td class="py-2 px-3 font-sans font-semibold ${idColor}">${m.id}</td>
+            <td class="py-2 px-3 text-slate-300">${m.matInfo}</td>
+            <td class="py-2 px-3 text-amber-300">${m.force}</td>
+            <td class="py-2 px-3 font-bold text-blue-400">${m.size}</td>
+            <td class="py-2 px-3 font-sans ${m.pass ? 'text-slate-400' : 'text-rose-400'}">${m.note}</td>
+          </tr>
+        `;
+      }).join('');
+
+      // 設計狀態
+      const dsg = res.design;
+      const basisEl = document.getElementById('txtCodeBasis');
+      basisEl.textContent = dsg.converged
+        ? `迭代 ${dsg.iter} 次收斂${dsg.reasons.length ? ` · 已因${dsg.reasons.join('、')}放大斷面` : ' · 初估即滿足'} · 柱 Bx×Dy`
+        : `⚠ 迭代 ${dsg.iter} 次未收斂（${dsg.reasons.join('、')}）`;
+      basisEl.className = `text-[11px] ${dsg.allPass ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      // FEM Summary
+      const lim = DRIFT_LIMIT * 1000;
+      document.getElementById('femMaxMoment').textContent = `${res.femResult.maxBeamMoment.toFixed(1)} tf·m`;
+      document.getElementById('femMaxAxial').textContent = `${res.femResult.maxColAxial.toFixed(1)} tf`;
+      const dX = res.femX.maxDriftPermille, dY = res.femY.maxDriftPermille;
+      const driftOK = Math.max(dX, dY) <= lim + 1e-9;
+      const driftEl = document.getElementById('femMaxDrift');
+      driftEl.textContent = `X ${dX.toFixed(2)}‰ / Y ${dY.toFixed(2)}‰ (${driftOK ? '合格' : '超過'})`;
+      driftEl.className = `text-base font-bold font-mono ${driftOK ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      // P-M Summary
+      document.getElementById('txtPmDirLabel').textContent = state.femDir === 'X'
+        ? `X向彎矩 (抗彎深 Bx=${res.colC1Spec.Bx}cm)`
+        : `Y向彎矩 (抗彎深 Dy=${res.colC1Spec.Dy}cm)`;
+      document.getElementById('pmPhiPnMax').textContent = `${res.pmResult.phiPnMax.toFixed(1)} tf`;
+      document.getElementById('pmBalanced').textContent = `${res.pmResult.phiPb.toFixed(0)} tf / ${res.pmResult.phiMb.toFixed(0)} tf·m`;
+      document.getElementById('pmPhiMn0').textContent = `${res.pmResult.phiMn0.toFixed(1)} tf·m`;
+      document.getElementById('pmDemandC1').textContent = `(${res.pmResult.MuDemandTfm.toFixed(1)} tf·m, ${res.pmResult.PuDemandTf.toFixed(1)} tf) ${res.pmResult.combo}`;
+      const dcEl = document.getElementById('pmDCRatio');
+      dcEl.textContent = `${res.pmResult.dcRatio.toFixed(2)} (${res.pmResult.dcRatio <= 1.0 ? '安全 SAFE' : '需加大斷面'})`;
+      dcEl.className = `font-mono font-bold ${res.pmResult.dcRatio <= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+      document.getElementById('preHandcalcs').textContent = generateHandcalcsMarkdown(res);
+
+      drawPlanCanvas(res);
+      draw3DWireframe(res);
+      if (state.activeTab === 'fem') drawFEMCanvas(res);
+      if (state.activeTab === 'pm') drawPMCanvas(res);
+    }
+
+    function setStructMode(mode) {
+      state.structType = mode;
+      const btnRC = document.getElementById('btnModeRC');
+      const btnSS = document.getElementById('btnModeSS');
+      const panelSSCol = document.getElementById('panelSSColType');
+
+      if (mode === 'RC') {
+        btnRC.className = 'py-2 px-3 rounded-md text-xs font-semibold transition bg-blue-600 text-white shadow';
+        btnSS.className = 'py-2 px-3 rounded-md text-xs font-semibold transition text-slate-400 hover:text-white';
+        panelSSCol.classList.add('hidden');
+      } else {
+        btnSS.className = 'py-2 px-3 rounded-md text-xs font-semibold transition bg-amber-600 text-white shadow';
+        btnRC.className = 'py-2 px-3 rounded-md text-xs font-semibold transition text-slate-400 hover:text-white';
+        panelSSCol.classList.remove('hidden');
+      }
+      renderMaterialZonesUI();
+      renderAll();
+    }
+
+    function applyPreset(preset) {
+      if (preset === 'default') {
+        // 16F住宅 3X3跨 / 8m
+        Object.assign(state, {
+          floors: 16,
+          firstStoryHeight: 4.2,
+          storyHeight: 3.3,
+          baysX: 3,
+          spanX: 8.0,
+          baysY: 3,
+          spanY: 8.0,
+          colAspectMode: 'rect_auto',
+          subBeamDiv: 2,
+          structType: 'RC',
+          materialZones: [
+            { startFloor: 1, fc: 420, fy: 4200, steelFy: 3300 },
+            { startFloor: 6, fc: 350, fy: 4200, steelFy: 3300 },
+            { startFloor: 12, fc: 280, fy: 4200, steelFy: 2500 }
+          ],
+          occupancy: 'residential',
+          sdl: 150,
+          ll: 200,
+          sds: 0.70, sd1: 0.45
+        });
+      } else if (preset === 'office') {
+        // 11F商辦 3X4跨 / 10m x 8m (體現長短跨矩形柱)
+        Object.assign(state, {
+          floors: 11,
+          firstStoryHeight: 4.5,
+          storyHeight: 3.8,
+          baysX: 3,
+          spanX: 10.0,
+          baysY: 4,
+          spanY: 8.0,
+          colAspectMode: 'rect_auto',
+          subBeamDiv: 2,
+          structType: 'RC',
+          materialZones: [
+            { startFloor: 1, fc: 420, fy: 4200, steelFy: 3300 },
+            { startFloor: 5, fc: 350, fy: 4200, steelFy: 3300 },
+            { startFloor: 9, fc: 280, fy: 4200, steelFy: 2500 }
+          ],
+          occupancy: 'office',
+          sdl: 180,
+          ll: 300,
+          sds: 0.70, sd1: 0.45
+        });
+      } else if (preset === 'factory') {
+        Object.assign(state, {
+          floors: 3,
+          firstStoryHeight: 5.5,
+          storyHeight: 4.8,
+          baysX: 3,
+          spanX: 10.0,
+          baysY: 4,
+          spanY: 9.0,
+          colAspectMode: 'rect_auto',
+          subBeamDiv: 3,
+          structType: 'SS',
+          materialZones: [
+            { startFloor: 1, fc: 280, fy: 4200, steelFy: 3300 },
+            { startFloor: 2, fc: 280, fy: 4200, steelFy: 2500 }
+          ],
+          occupancy: 'factory_light',
+          sdl: 150,
+          ll: 500,
+          sds: 0.70, sd1: 0.45
+        });
+      }
+
+      document.getElementById('inpFloors').value = state.floors;
+      document.getElementById('inpFirstStoryHeight').value = state.firstStoryHeight;
+      document.getElementById('inpStoryHeight').value = state.storyHeight;
+      document.getElementById('inpBaysX').value = state.baysX;
+      document.getElementById('inpSpanX').value = state.spanX;
+      document.getElementById('inpBaysY').value = state.baysY;
+      document.getElementById('inpSpanY').value = state.spanY;
+      document.getElementById('selColAspect').value = state.colAspectMode;
+      document.getElementById('wrapCustomColRatio').classList.toggle('hidden', state.colAspectMode !== 'rect_custom');
+      document.getElementById('selSubBeam').value = state.subBeamDiv;
+      document.getElementById('selOccupancy').value = state.occupancy;
+      document.getElementById('inpSDL').value = state.sdl;
+      document.getElementById('inpLL').value = state.ll;
+      document.getElementById('selSeismic').value = `${state.sds.toFixed(2)}|${state.sd1.toFixed(2)}`;
+      document.getElementById('inpSdsExact').value = state.sds.toFixed(2);
+      document.getElementById('inpSd1Exact').value = state.sd1.toFixed(2);
+      setStructMode(state.structType);
+    }
+
+    function copyMarkdownReport() {
+      const text = document.getElementById('preHandcalcs').textContent;
+      const showToast = () => {
+        const toast = document.getElementById('toastMsg');
+        toast.classList.remove('translate-y-20', 'opacity-0');
+        setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(showToast).catch(() => fallbackCopy(text, showToast));
+      } else {
+        fallbackCopy(text, showToast);
+      }
+    }
+
+    function fallbackCopy(text, cb) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      cb();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('inpFloors').addEventListener('input', e => {
+        state.floors = parseInt(e.target.value, 10);
+        renderMaterialZonesUI();
+        renderAll();
+      });
+
+      const bindFloatSlider = (id, key) => {
+        const el = document.getElementById(id);
+        el.addEventListener('input', () => {
+          state[key] = parseFloat(el.value);
+          renderAll();
+        });
+      };
+
+      const bindIntSlider = (id, key) => {
+        const el = document.getElementById(id);
+        el.addEventListener('input', () => {
+          state[key] = parseInt(el.value, 10);
+          renderAll();
+        });
+      };
+
+      bindFloatSlider('inpFirstStoryHeight', 'firstStoryHeight');
+      bindFloatSlider('inpStoryHeight', 'storyHeight');
+      bindIntSlider('inpBaysX', 'baysX');
+      bindFloatSlider('inpSpanX', 'spanX');
+      bindIntSlider('inpBaysY', 'baysY');
+      bindFloatSlider('inpSpanY', 'spanY');
+
+      document.getElementById('selColAspect').addEventListener('change', e => {
+        state.colAspectMode = e.target.value;
+        document.getElementById('wrapCustomColRatio').classList.toggle('hidden', state.colAspectMode !== 'rect_custom');
+        renderAll();
+      });
+
+      document.getElementById('inpColRatioXY').addEventListener('input', e => {
+        state.customColRatio = parseFloat(e.target.value);
+        const desc = state.customColRatio > 1.02 ? '(X向較寬)' : (state.customColRatio < 0.98 ? '(Y向較深)' : '(正方形)');
+        document.getElementById('valColRatioXY').textContent = `${state.customColRatio.toFixed(2)} ${desc}`;
+        renderAll();
+      });
+
+      document.getElementById('selSubBeam').addEventListener('change', e => {
+        state.subBeamDiv = parseInt(e.target.value, 10);
+        renderAll();
+      });
+
+      // 新增分段材料規格按鈕 [+]
+      document.getElementById('btnAddZone').addEventListener('click', () => {
+        normalizeMaterialZones();
+        const Z = state.floors;
+        const last = state.materialZones[state.materialZones.length - 1];
+        if (Z < 2 || last.startFloor >= Z) return;
+
+        // 若目前只有 1 段，預設從 2F 開始分段；若已有多段，從最後一段 +1 或中間樓層切分
+        const newStart = state.materialZones.length === 1
+          ? 2
+          : Math.min(Z, last.startFloor + Math.max(1, Math.floor((Z - last.startFloor + 1) / 2)));
+
+        const nextFc = Math.max(210, last.fc - 70);
+        state.materialZones.push({
+          startFloor: newStart,
+          fc: nextFc,
+          fy: last.fy,
+          steelFy: last.steelFy
+        });
+        renderMaterialZonesUI();
+        renderAll();
+      });
+
+      document.getElementById('btnModeRC').addEventListener('click', () => setStructMode('RC'));
+      document.getElementById('btnModeSS').addEventListener('click', () => setStructMode('SS'));
+
+      document.getElementById('selColShape').addEventListener('change', e => {
+        state.colShape = e.target.value;
+        renderAll();
+      });
+
+      document.getElementById('selOccupancy').addEventListener('change', e => {
+        state.occupancy = e.target.value;
+        state.ll = OCCUPANCY_LL[state.occupancy] || 200;
+        document.getElementById('inpLL').value = state.ll;
+        renderAll();
+      });
+
+      document.getElementById('inpSDL').addEventListener('input', e => {
+        state.sdl = Math.max(0, parseFloat(e.target.value) || 0);
+        renderAll();
+      });
+      document.getElementById('inpLL').addEventListener('input', e => {
+        state.ll = Math.max(50, parseFloat(e.target.value) || 200);
+        renderAll();
+      });
+
+      document.getElementById('selSeismic').addEventListener('change', e => {
+        const [sds, sd1] = e.target.value.split('|').map(parseFloat);
+        state.sds = sds;
+        state.sd1 = sd1;
+        document.getElementById('inpSdsExact').value = state.sds.toFixed(2);
+        document.getElementById('inpSd1Exact').value = state.sd1.toFixed(2);
+        renderAll();
+      });
+
+      const bindNumber = (id, key, min, max) => {
+        document.getElementById(id).addEventListener('input', e => {
+          const val = parseFloat(e.target.value);
+          if (!isNaN(val) && val >= min && val <= max) {
+            state[key] = val;
+            renderAll();
+          }
+        });
+      };
+      bindNumber('inpSdsExact', 'sds', 0.2, 1.5);
+      bindNumber('inpSd1Exact', 'sd1', 0.1, 1.5);
+      bindNumber('inpRsys', 'Rsys', 1.0, 8.0);
+      bindNumber('inpAlphaY', 'alphaY', 1.0, 2.0);
+      document.getElementById('selImportance').addEventListener('change', e => {
+        state.importanceI = parseFloat(e.target.value);
+        renderAll();
+      });
+
+      document.getElementById('selFemDir').addEventListener('change', e => {
+        state.femDir = e.target.value;
+        renderAll();
+      });
+      document.getElementById('selFemDiagram').addEventListener('change', e => {
+        state.femDiagram = e.target.value;
+        renderAll();
+      });
+      document.getElementById('inpRebarRatio').addEventListener('change', e => {
+        state.rebarRatio = parseFloat(e.target.value);
+        renderAll();
+      });
+
+      document.getElementById('btnPresetDefault').addEventListener('click', () => applyPreset('default'));
+      document.getElementById('btnPresetOffice').addEventListener('click', () => applyPreset('office'));
+      document.getElementById('btnPresetFactory').addEventListener('click', () => applyPreset('factory'));
+      document.getElementById('btnCopyReport').addEventListener('click', copyMarkdownReport);
+      document.getElementById('btnCopyCalcInner').addEventListener('click', copyMarkdownReport);
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const target = btn.getAttribute('data-tab');
+          state.activeTab = target;
+          document.querySelectorAll('.tab-btn').forEach(b => {
+            const active = b.getAttribute('data-tab') === target;
+            b.className = active
+              ? 'tab-btn px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-blue-500 text-blue-400 bg-slate-900'
+              : 'tab-btn px-3.5 py-2 text-xs font-semibold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+          });
+          document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.toggle('hidden', panel.id !== `tab-${target}`);
+          });
+          renderAll();
+        });
+      });
+
+      window.addEventListener('resize', () => renderAll());
+      renderMaterialZonesUI();
+      renderAll();
+    });
+  </script>
+</body>
+</html>
