@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>無框玻璃扶手結構初評與公式還原系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* 自訂捲軸與滑桿外觀 */
+    input[type="range"] {
+      accent-color: #0284c7;
+    }
+    .blueprint-grid {
+      background-color: #0f172a;
+      background-image: 
+        linear-gradient(to right, rgba(56, 189, 248, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(56, 189, 248, 0.08) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .formula-box {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border-left: 4px solid #0284c7;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- 頂部導覽列 -->
+  <header class="bg-slate-900 text-white border-b border-slate-700 sticky top-0 z-30 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 font-bold mono text-lg">
+          GL2
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-bold tracking-tight">無框玻璃扶手結構初評與公式還原系統</h1>
+            <span class="hidden sm:inline-block px-2 py-0.5 text-xs font-medium bg-sky-500/20 text-sky-300 border border-sky-400/30 rounded">ASTM E1300 / 懸臂版理論</span>
+          </div>
+          <p class="text-xs text-slate-400">單短邊支撐（底部連續不鏽鋼 U 槽）抗風壓應力、撓度與等效厚度逆向工程計算機</p>
+        </div>
+      </div>
+
+      <!-- 快速載入廠商原表 4 組案例按鈕 -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-xs text-slate-400 mr-1">載入廠商原表案例：</span>
+        <button onclick="loadVendorPreset(1)" id="preset-btn-1" class="px-2.5 py-1.5 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition">
+          ① 8+PVB+8 <span class="text-rose-400 font-bold">(NG)</span>
+        </button>
+        <button onclick="loadVendorPreset(2)" id="preset-btn-2" class="px-2.5 py-1.5 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition">
+          ② 19+PVB+19 <span class="text-emerald-400 font-bold">(OK)</span>
+        </button>
+        <button onclick="loadVendorPreset(3)" id="preset-btn-3" class="px-2.5 py-1.5 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition">
+          ③ 8+SGP+8 <span class="text-rose-400 font-bold">(NG)</span>
+        </button>
+        <button onclick="loadVendorPreset(4)" id="preset-btn-4" class="px-2.5 py-1.5 text-xs font-medium rounded bg-sky-600 hover:bg-sky-500 text-white border border-sky-400 shadow-sm transition">
+          ④ 12+SGP+12 <span class="text-emerald-200 font-bold">(推薦 OK)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容區 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    
+    <!-- 頂部逆向工程洞察橫幅 -->
+    <div class="mb-6 bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div class="flex items-start gap-3">
+        <div class="mt-0.5 p-2 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </div>
+        <div class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+          <span class="font-bold text-slate-900">廠商計算書逆向還原結論：</span>
+          廠商軟體以<strong class="text-sky-700">玻璃總長 $L = 1210\text{ mm}$</strong> 作為懸臂跨度進行保守計算（實務上埋入 U 槽 110mm 後，實際外露懸臂僅 1100mm）。此外，廠商對 <strong class="text-slate-800">PVB 膜設定剪力傳遞係數 $\Gamma \approx 0.16\sim0.23$</strong>（接近兩片獨立分層承受），而對 <strong class="text-slate-800">SGP 結構膜設定 $\Gamma \approx 0.94\sim0.96$</strong>（接近全結合單一厚板），因此在 12+SGP+12 配置下撓度得以從 83.99mm 驟降至 7.69mm。
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0 self-end lg:self-center">
+        <span class="text-xs font-medium text-slate-500">跨度計算基準：</span>
+        <div class="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5">
+          <button onclick="setSpanMode('total')" id="span-mode-total" class="px-3 py-1 text-xs font-semibold rounded-md bg-white text-sky-700 shadow-sm transition">
+            廠商基準 (總高 L=1210)
+          </button>
+          <button onclick="setSpanMode('exposed')" id="span-mode-exposed" class="px-3 py-1 text-xs font-medium rounded-md text-slate-600 hover:text-slate-900 transition">
+            實際懸臂 (外露 H=1100)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- 左側：參數輸入控制面板 (5 欄) -->
+      <div class="lg:col-span-5 space-y-5">
+        
+        <!-- 1. 幾何尺寸與寬度檢核 -->
+        <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span class="w-5 h-5 rounded bg-sky-600 text-white text-xs flex items-center justify-center mono">1</span>
+              幾何尺寸與安裝條件 (Geometry)
+            </h2>
+            <div class="flex gap-1">
+              <button onclick="setWidthPreset(1000)" id="width-btn-1000" class="px-2 py-0.5 text-xs rounded border border-sky-500 bg-sky-50 text-sky-700 font-medium">寬 1000mm</button>
+              <button onclick="setWidthPreset(1500)" id="width-btn-1500" class="px-2 py-0.5 text-xs rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 font-medium">寬 1500mm</button>
+            </div>
+          </div>
+          <div class="p-4 space-y-4">
+            <!-- 外露高度 -->
+            <div>
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label class="text-slate-700">外露懸臂高度 $H_{exp}$ (完成面以上)</label>
+                <span class="mono font-bold text-sky-700"><span id="val-h-exp">1100</span> mm (110 cm)</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <input type="range" id="input-h-exp" min="800" max="1500" step="10" value="1100" oninput="syncInputs('h-exp', this.value)" class="w-full">
+                <input type="number" id="num-h-exp" min="600" max="2000" step="10" value="1100" oninput="syncInputs('h-exp', this.value)" class="w-20 px-2 py-1 text-xs mono border border-slate-300 rounded text-right">
+              </div>
+            </div>
+
+            <!-- 埋入深度 -->
+            <div>
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label class="text-slate-700">底部 U 槽埋入深度 $H_{embed}$</label>
+                <span class="mono font-bold text-slate-700"><span id="val-h-embed">110</span> mm (11 cm)</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <input type="range" id="input-h-embed" min="80" max="250" step="5" value="110" oninput="syncInputs('h-embed', this.value)" class="w-full">
+                <input type="number" id="num-h-embed" min="50" max="400" step="5" value="110" oninput="syncInputs('h-embed', this.value)" class="w-20 px-2 py-1 text-xs mono border border-slate-300 rounded text-right">
+              </div>
+              <div class="mt-1 flex justify-between text-[11px] text-slate-500">
+                <span>玻璃總高度 $L_{total} = $ <strong id="val-l-total" class="mono text-slate-800">1210</strong> mm</span>
+                <span>埋入比 $H_{embed}/H_{exp} = $ <strong id="val-embed-ratio" class="mono text-amber-600">1 : 10.0</strong> (建議 ≥ 1:10)</span>
+              </div>
+            </div>
+
+            <!-- 單片玻璃寬度 -->
+            <div class="pt-2 border-t border-slate-100">
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label class="text-slate-700">單片玻璃寬度 $B$ (測試 1000 vs 1500)</label>
+                <span class="mono font-bold text-indigo-600"><span id="val-width">1000</span> mm</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <input type="range" id="input-width" min="500" max="2500" step="50" value="1000" oninput="syncInputs('width', this.value)" class="w-full">
+                <input type="number" id="num-width" min="300" max="3000" step="50" value="1000" oninput="syncInputs('width', this.value)" class="w-20 px-2 py-1 text-xs mono border border-slate-300 rounded text-right">
+              </div>
+              <p class="mt-1.5 text-[11px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-200/80">
+                💡 <strong class="text-slate-700">單向版理論驗證：</strong>底部為連續 U 槽時，單位寬度應力 $\sigma$ 與撓度 $\delta$ <strong class="text-emerald-700">不受寬度 $B$ 影響</strong>；但單片總風力、玻璃自重與錨栓總負荷會隨寬度成正比放大。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. 玻璃與膠合膜結構配置 -->
+        <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span class="w-5 h-5 rounded bg-sky-600 text-white text-xs flex items-center justify-center mono">2</span>
+              玻璃與中間膜配置 (Laminated Glass)
+            </h2>
+            <span id="current-combo-badge" class="px-2 py-0.5 text-xs mono font-bold bg-sky-100 text-sky-800 rounded">12TP + SGP + 12TP</span>
+          </div>
+          <div class="p-4 space-y-4">
+            <!-- 單片玻璃厚度選擇 -->
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1.5">對稱雙層玻璃單片厚度 $h_1 = h_2$ (mm)</label>
+              <div class="grid grid-cols-6 gap-1.5">
+                <button onclick="setGlassThick(6)" id="thick-btn-6" class="py-1.5 text-xs mono font-semibold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">6mm</button>
+                <button onclick="setGlassThick(8)" id="thick-btn-8" class="py-1.5 text-xs mono font-semibold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">8mm</button>
+                <button onclick="setGlassThick(10)" id="thick-btn-10" class="py-1.5 text-xs mono font-semibold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">10mm</button>
+                <button onclick="setGlassThick(12)" id="thick-btn-12" class="py-1.5 text-xs mono font-semibold rounded border border-sky-600 bg-sky-600 text-white shadow-sm">12mm</button>
+                <button onclick="setGlassThick(15)" id="thick-btn-15" class="py-1.5 text-xs mono font-semibold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">15mm</button>
+                <button onclick="setGlassThick(19)" id="thick-btn-19" class="py-1.5 text-xs mono font-semibold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">19mm</button>
+              </div>
+            </div>
+
+            <!-- 玻璃熱處理種類 -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">玻璃熱處理等級</label>
+                <select id="select-glass-type" onchange="onGlassTypeChange()" class="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 font-medium">
+                  <option value="TP" selected>強化玻璃 (TP/FT) - 容許 50 MPa</option>
+                  <option value="HS">熱硬化玻璃 (HS) - 容許 24 MPa</option>
+                  <option value="AN">普通浮法玻璃 (AN) - 容許 16.5 MPa</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">中間膜厚度 $h_{int}$</label>
+                <select id="select-interlayer-thick" onchange="recalculate()" class="w-full px-2.5 py-1.5 text-xs mono border border-slate-300 rounded-lg bg-white text-slate-800 font-medium">
+                  <option value="0.89">0.89 mm (35 mil SGP)</option>
+                  <option value="1.52" selected>1.52 mm (60 mil 標準)</option>
+                  <option value="2.28">2.28 mm (90 mil 加厚)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 中間膜種類與剪力傳遞係數 Gamma -->
+            <div class="pt-2 border-t border-slate-100">
+              <label class="block text-xs font-medium text-slate-700 mb-1.5">膠合中間膜材質與剪力傳遞係數 ($\Gamma$)</label>
+              <div class="grid grid-cols-3 gap-2 mb-3">
+                <button onclick="setInterlayerType('PVB')" id="interlayer-btn-PVB" class="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-slate-50 transition">
+                  <div class="text-xs font-bold text-slate-800">一般 PVB 膜</div>
+                  <div class="text-[10px] text-slate-500 mono">廠商設定 Γ ≈ 0.21</div>
+                </button>
+                <button onclick="setInterlayerType('SGP')" id="interlayer-btn-SGP" class="p-2 rounded-lg border border-sky-600 bg-sky-50/70 text-left shadow-sm transition">
+                  <div class="text-xs font-bold text-sky-900">結構 SGP 離子膜</div>
+                  <div class="text-[10px] text-sky-700 mono">廠商設定 Γ ≈ 0.95</div>
+                </button>
+                <button onclick="setInterlayerType('NONE')" id="interlayer-btn-NONE" class="p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-slate-50 transition">
+                  <div class="text-xs font-bold text-slate-800">完全無剪力 (Γ=0)</div>
+                  <div class="text-[10px] text-slate-500 mono">傳統極保守簡算</div>
+                </button>
+              </div>
+
+              <!-- Gamma 微調滑桿 -->
+              <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="font-medium text-slate-700">剪力傳遞係數 $\Gamma$ (0 = 完全分層, 1 = 完全結合)</span>
+                  <span class="mono font-bold text-sky-700" id="val-gamma">0.95</span>
+                </div>
+                <input type="range" id="input-gamma" min="0" max="1" step="0.01" value="0.95" oninput="onCustomGamma(this.value)" class="w-full">
+                <div class="flex justify-between text-[10px] text-slate-400 mono mt-0.5">
+                  <span>0.0 (獨立雙片 2I₁)</span>
+                  <span>0.21 (廠商 PVB)</span>
+                  <span>0.95 (廠商 SGP)</span>
+                  <span>1.0 (全結合單片)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. 環境風壓與審查標準 -->
+        <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="bg-slate-50 px-4 py-3 border-b border-slate-200">
+            <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <span class="w-5 h-5 rounded bg-sky-600 text-white text-xs flex items-center justify-center mono">3</span>
+              環境風壓與合格判準 (Load & Criteria)
+            </h2>
+          </div>
+          <div class="p-4 space-y-4">
+            <!-- 環境風壓 -->
+            <div>
+              <div class="flex justify-between text-xs font-medium mb-1">
+                <label class="text-slate-700">環境設計風壓 $q$ (kPa = $\text{kN/m}^2$)</label>
+                <span class="mono font-bold text-rose-600"><span id="val-wind">3.53</span> kPa (<span id="val-wind-kgf">360</span> $\text{kgf/m}^2$)</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <input type="range" id="input-wind" min="0.5" max="6.0" step="0.01" value="3.53" oninput="syncInputs('wind', this.value)" class="w-full">
+                <input type="number" id="num-wind" min="0.5" max="10.0" step="0.01" value="3.53" oninput="syncInputs('wind', this.value)" class="w-20 px-2 py-1 text-xs mono border border-slate-300 rounded text-right">
+              </div>
+            </div>
+
+            <!-- 容許應力與容許撓度 -->
+            <div class="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">容許表面應力 $\sigma_{allow}$ (MPa)</label>
+                <input type="number" id="input-allow-stress" value="50.0" step="1" oninput="recalculate()" class="w-full px-2.5 py-1.5 text-xs mono font-bold border border-slate-300 rounded-lg bg-white text-slate-800">
+                <span class="text-[10px] text-slate-400">強化玻璃常規上限 50 MPa</span>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">容許撓度上限標準 $\delta_{allow}$</label>
+                <select id="select-defl-limit" onchange="recalculate()" class="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white text-slate-800 font-medium">
+                  <option value="L_60" selected>L / 60 (約 20.1 mm) - 常用規範</option>
+                  <option value="ABS_15">絕對值 ≤ 15.0 mm (嚴格舒適度)</option>
+                  <option value="L_100">L / 100 (約 12.1 mm) - 高標</option>
+                  <option value="ABS_25">絕對值 ≤ 25.0 mm (一般上限)</option>
+                </select>
+                <span class="text-[10px] text-slate-400">廠商表中 27.03mm 判為 NG</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- 右側：即時計算結果、視覺化斷面與公式推導 (7 欄) -->
+      <div class="lg:col-span-7 space-y-5">
+
+        <!-- 頂部 4 大核心指標卡 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+          <!-- 卡片 1: 表面應力 -->
+          <div id="card-stress" class="bg-white rounded-xl p-4 border-2 border-emerald-500 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-slate-500">表面最大彎曲應力 $\sigma$</span>
+              <span id="badge-stress" class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-100 text-emerald-800 mono">OK 合格</span>
+            </div>
+            <div class="flex items-baseline gap-1.5 my-1">
+              <span id="res-stress" class="text-2xl font-extrabold mono text-slate-900">23.77</span>
+              <span class="text-xs font-semibold text-slate-500">MPa</span>
+            </div>
+            <div class="text-[11px] text-slate-500 flex justify-between items-center mt-2 pt-2 border-t border-slate-100">
+              <span>容許值: ≤ <strong id="lbl-allow-stress" class="mono">50.0</strong> MPa</span>
+              <span id="res-stress-ratio" class="mono font-semibold text-emerald-600">47.5%</span>
+            </div>
+          </div>
+
+          <!-- 卡片 2: 頂部撓度 -->
+          <div id="card-defl" class="bg-white rounded-xl p-4 border-2 border-emerald-500 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-slate-500">自由端最大撓度 $\delta$</span>
+              <span id="badge-defl" class="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-100 text-emerald-800 mono">OK 合格</span>
+            </div>
+            <div class="flex items-baseline gap-1.5 my-1">
+              <span id="res-defl" class="text-2xl font-extrabold mono text-slate-900">7.69</span>
+              <span class="text-xs font-semibold text-slate-500">mm</span>
+            </div>
+            <div class="text-[11px] text-slate-500 flex justify-between items-center mt-2 pt-2 border-t border-slate-100">
+              <span>容許值: ≤ <strong id="lbl-allow-defl" class="mono">20.2</strong> mm</span>
+              <span id="res-defl-span" class="mono font-semibold text-sky-700">L / 157</span>
+            </div>
+          </div>
+
+          <!-- 卡片 3: 等效厚度 -->
+          <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-slate-500">等效單片厚度 $t_{eff}$</span>
+              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-slate-100 text-slate-600 mono">ASTM E1300</span>
+            </div>
+            <div class="my-1 space-y-0.5">
+              <div class="flex justify-between items-baseline">
+                <span class="text-xs text-slate-500">應力 $t_{eff,\sigma}$:</span>
+                <span class="text-base font-bold mono text-slate-800"><span id="res-teff-s">25.56</span> mm</span>
+              </div>
+              <div class="flex justify-between items-baseline">
+                <span class="text-xs text-slate-500">撓度 $t_{eff,\delta}$:</span>
+                <span class="text-base font-bold mono text-sky-700"><span id="res-teff-d">25.16</span> mm</span>
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-100 flex justify-between">
+              <span>幾何總厚:</span>
+              <strong id="res-total-thick" class="mono text-slate-700">25.52 mm</strong>
+            </div>
+          </div>
+
+          <!-- 卡片 4: 單片重量與底座彎矩 (隨寬度變化) -->
+          <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold text-slate-500">單片自重與總風載</span>
+              <span id="badge-width-tag" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-50 text-indigo-700 mono">B=1000mm</span>
+            </div>
+            <div class="my-1 space-y-0.5">
+              <div class="flex justify-between items-baseline">
+                <span class="text-xs text-slate-500">單片重量:</span>
+                <span class="text-base font-bold mono text-slate-800"><span id="res-weight">73.8</span> kg</span>
+              </div>
+              <div class="flex justify-between items-baseline">
+                <span class="text-xs text-slate-500">單片總傾覆力矩:</span>
+                <span class="text-base font-bold mono text-amber-600"><span id="res-total-moment">2.58</span> kN·m</span>
+              </div>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-100 flex justify-between">
+              <span>U槽單位彎矩:</span>
+              <strong id="res-unit-moment" class="mono text-slate-700">2.58 kN·m/m</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 視覺化互動工程斷面圖與原廠數據對比 -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-5 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+          
+          <!-- SVG 動態工程剖面圖 (5 欄) -->
+          <div class="md:col-span-5 blueprint-grid rounded-lg p-3 flex flex-col justify-between relative overflow-hidden border border-slate-800">
+            <div class="flex items-center justify-between text-xs text-sky-300/90 mono z-10">
+              <span>SECTION DETAIL (GL2)</span>
+              <span id="svg-status-pill" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-bold">PASS</span>
+            </div>
+
+            <div class="my-auto flex items-center justify-center py-2">
+              <svg id="section-svg" viewBox="0 0 280 320" class="w-full max-w-[250px] h-auto select-none">
+                <defs>
+                  <marker id="arrow-wind" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+                  </marker>
+                  <marker id="arrow-dim" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+                    <path d="M 0 2 L 10 5 L 0 8 z" fill="#94a3b8" />
+                  </marker>
+                </defs>
+
+                <!-- 底部 RC 結構女兒牆與地面 -->
+                <rect x="95" y="230" width="60" height="80" fill="#1e293b" stroke="#475569" stroke-width="1.5" />
+                <rect x="155" y="255" width="110" height="55" fill="#1e293b" stroke="#475569" stroke-width="1.5" />
+                <!-- 1:100 洩水坡度標示 -->
+                <text x="175" y="248" fill="#94a3b8" font-size="8" font-family="sans-serif">室內完成面 (1:100洩水)</text>
+
+                <!-- 連續不鏽鋼 U 槽 -->
+                <path d="M 116 230 L 116 290 L 144 290 L 144 230" fill="#334155" stroke="#cbd5e1" stroke-width="2.5" />
+                <!-- 底部硬質承重墊塊 Setting Block -->
+                <rect x="122" y="283" width="16" height="5" fill="#f59e0b" />
+
+                <!-- 原始未變形玻璃 (中心 x=130) -->
+                <rect id="svg-glass-left" x="124" y="30" width="5" height="253" fill="rgba(125, 211, 252, 0.45)" stroke="#38bdf8" stroke-width="0.8" />
+                <rect id="svg-interlayer" x="129" y="30" width="2" height="253" fill="#facc15" />
+                <rect id="svg-glass-right" x="131" y="30" width="5" height="253" fill="rgba(125, 211, 252, 0.45)" stroke="#38bdf8" stroke-width="0.8" />
+
+                <!-- 頂部 1mm 不鏽鋼保護條 -->
+                <path d="M 122 36 L 122 27 L 138 27 L 138 36" fill="none" stroke="#f8fafc" stroke-width="2" />
+                <text x="145" y="30" fill="#e2e8f0" font-size="8" font-family="monospace">1mm 不鏽鋼保護條</text>
+
+                <!-- 動態受風彎曲變形虛線 -->
+                <path id="svg-deflection-curve" d="M 130 230 Q 130 130 148 30" fill="none" stroke="#34d399" stroke-width="2.5" stroke-dasharray="5,3" />
+                <circle id="svg-deflection-dot" cx="148" cy="30" r="3.5" fill="#34d399" />
+                <text id="svg-deflection-text" x="155" y="45" fill="#34d399" font-size="10" font-weight="bold" font-family="monospace">δ = 7.69mm</text>
+
+                <!-- 左側環境風壓箭頭群 -->
+                <g stroke="#38bdf8" stroke-width="1.5">
+                  <line x1="65" y1="55" x2="115" y2="55" marker-end="url(#arrow-wind)" />
+                  <line x1="65" y1="95" x2="115" y2="95" marker-end="url(#arrow-wind)" />
+                  <line x1="65" y1="135" x2="115" y2="135" marker-end="url(#arrow-wind)" />
+                  <line x1="65" y1="175" x2="115" y2="175" marker-end="url(#arrow-wind)" />
+                  <line x1="65" y1="210" x2="115" y2="210" marker-end="url(#arrow-wind)" />
+                  <line x1="65" y1="55" x2="65" y2="210" stroke-opacity="0.5" />
+                </g>
+                <text x="58" y="45" fill="#38bdf8" font-size="9" font-family="monospace" text-anchor="middle" id="svg-wind-label">q = 3.53 kPa</text>
+
+                <!-- 尺寸標註線 (右側紅字還原) -->
+                <line x1="190" y1="30" x2="190" y2="230" stroke="#f87171" stroke-width="1.2" />
+                <line x1="184" y1="30" x2="196" y2="30" stroke="#f87171" stroke-width="1.2" />
+                <line x1="184" y1="230" x2="196" y2="230" stroke="#f87171" stroke-width="1.2" />
+                <text x="198" y="135" fill="#fca5a5" font-size="11" font-weight="bold" font-family="monospace" id="svg-hexp-label">110 cm</text>
+
+                <line x1="190" y1="230" x2="190" y2="283" stroke="#fb923c" stroke-width="1.2" />
+                <line x1="184" y1="283" x2="196" y2="283" stroke="#fb923c" stroke-width="1.2" />
+                <text x="198" y="268" fill="#fdba74" font-size="11" font-weight="bold" font-family="monospace" id="svg-hembed-label">11 cm</text>
+              </svg>
+            </div>
+
+            <div class="text-[11px] text-slate-400 flex justify-between border-t border-slate-800 pt-2">
+              <span>計算跨度 $L = $ <strong id="svg-span-val" class="text-white mono">1210 mm</strong></span>
+              <span>連續不鏽鋼 U 槽固定</span>
+            </div>
+          </div>
+
+          <!-- 廠商原表 4 組配置即時同步對照表 (7 欄) -->
+          <div class="md:col-span-7 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-bold text-slate-800">廠商原表 4 組配置同步對比表</h3>
+                <span class="text-[11px] text-slate-500">點擊任一列可直接套用該組參數</span>
+              </div>
+              <p class="text-xs text-slate-500 mb-3">
+                下表以您目前設定的幾何跨度与風壓，同步計算 4 種組合，並附上廠商原表（1210×1000 @ 3.53kPa）之基準值供比對：
+              </p>
+
+              <div class="overflow-x-auto border border-slate-200 rounded-lg">
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="bg-slate-100 text-[11px] font-bold text-slate-600 border-b border-slate-200">
+                      <th class="py-2 px-2.5">玻璃組合</th>
+                      <th class="py-2 px-2 text-right">表面應力 (MPa)</th>
+                      <th class="py-2 px-2 text-right">撓度 (mm)</th>
+                      <th class="py-2 px-2 text-center">判定</th>
+                    </tr>
+                  </thead>
+                  <tbody id="comparison-tbody" class="divide-y divide-slate-200 text-xs mono">
+                    <!-- 由 JS 動態渲染 -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 寬度 1000mm vs 1500mm 底座與現場施工檢核提示 -->
+            <div class="mt-4 bg-indigo-50/70 border border-indigo-200 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                  </svg>
+                  連續不鏽鋼 U 槽底座 & 寬度 (<span id="chk-width-lbl" class="mono">1000</span>mm) 施工檢核要點
+                </span>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-[11px]">
+                <div class="bg-white p-2 rounded border border-indigo-100">
+                  <div class="text-slate-500">單片玻璃總重量</div>
+                  <div class="font-bold text-slate-800 mono text-sm mt-0.5"><span id="chk-weight">73.8</span> kg</div>
+                  <div id="chk-weight-note" class="text-[10px] text-slate-500 mt-0.5">2名工人可徒手搬運安裝</div>
+                </div>
+                <div class="bg-white p-2 rounded border border-indigo-100">
+                  <div class="text-slate-500">U槽底部錨栓建議 (@250mm)</div>
+                  <div class="font-bold text-indigo-700 mono text-sm mt-0.5">至少 <span id="chk-anchors">4</span> 支 / 片</div>
+                  <div class="text-[10px] text-slate-500 mt-0.5">維持固定間距密度不稀疏</div>
+                </div>
+                <div class="bg-white p-2 rounded border border-indigo-100">
+                  <div class="text-slate-500">U槽槽口反力偶 (埋深11cm)</div>
+                  <div class="font-bold text-rose-700 mono text-sm mt-0.5"><span id="chk-slot-force">35.2</span> kN/m</div>
+                  <div class="text-[10px] text-slate-500 mt-0.5">務必使用無收縮水泥滿灌</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 完整公式還原與逐步代入計算書 (Step-by-Step Math Breakdown) -->
+        <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="bg-slate-800 text-white px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+              </svg>
+              <h2 class="text-sm font-bold">結構力學公式還原與逐步代入計算書 (供 Excel 建表與初評複核)</h2>
+            </div>
+            <button onclick="copyCalculationReport()" id="btn-copy-report" class="px-3 py-1 text-xs font-medium bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold rounded transition flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+              </svg>
+              <span id="copy-btn-text">複製計算書文字</span>
+            </button>
+          </div>
+
+          <div class="p-5 space-y-4 text-xs leading-relaxed">
+            
+            <!-- 步驟 1：基本參數與單位寬度懸臂彎矩 -->
+            <div class="formula-box p-3.5 rounded-r-lg">
+              <div class="font-bold text-slate-900 text-sm mb-1">
+                Step 1. 單位寬度懸臂梁最大彎矩 $M_{max}$ （證明與玻璃寬度 $B$ 無關）
+              </div>
+              <p class="text-slate-600 mb-2">
+                底部為連續不鏽鋼 U 槽時，取單位寬度 $b = 1\text{ mm}$ 切片分析（若取總寬 $B$，分子彎矩乘以 $B$，分母斷面模數 $Z = \frac{B \cdot t^2}{6}$ 亦乘以 $B$，兩者完全相消）：
+              </p>
+              <div class="bg-white p-2.5 rounded border border-slate-200 mono text-slate-800 overflow-x-auto" id="math-step-1">
+                <!-- JS 動態填入 -->
+              </div>
+            </div>
+
+            <!-- 步驟 2：雙層膠合玻璃等效厚度 (ASTM E1300) -->
+            <div class="formula-box p-3.5 rounded-r-lg">
+              <div class="font-bold text-slate-900 text-sm mb-1">
+                Step 2. 雙層對稱膠合玻璃之等效厚度 $t_{eff,\delta}$ 與 $t_{eff,\sigma}$ （依 ASTM E1300 剪力傳遞係數 $\Gamma$）
+              </div>
+              <p class="text-slate-600 mb-2">
+                設單片厚度 $h$，膠合膜厚 $h_{int}$，兩片玻璃中心距 $d = h + h_{int}$。當 $\Gamma = 0$ 時為兩片獨立疊合（$t_{eff,\delta} = 2^{1/3}h \approx 1.26h$）；當 $\Gamma = 1$ 時為完全結合單一厚板：
+              </p>
+              <div class="bg-white p-2.5 rounded border border-slate-200 mono text-slate-800 space-y-1.5 overflow-x-auto" id="math-step-2">
+                <!-- JS 動態填入 -->
+              </div>
+            </div>
+
+            <!-- 步驟 3：表面彎曲應力與自由端最大撓度 -->
+            <div class="formula-box p-3.5 rounded-r-lg">
+              <div class="font-bold text-slate-900 text-sm mb-1">
+                Step 3. 表面最大彎曲應力 $\sigma$ 與頂部自由端撓度 $\delta$ （玻璃楊氏模數 $E = 71,700\text{ MPa}$）
+              </div>
+              <p class="text-slate-600 mb-2">
+                將等效厚度代入懸臂梁應力公式 $\sigma = \frac{6M}{t_{eff,\sigma}^2} = \frac{3 \cdot q \cdot L^2}{t_{eff,\sigma}^2}$ 與撓度公式 $\delta = \frac{q \cdot L^4}{8 \cdot E \cdot I_{eff}} = \frac{3 \cdot q \cdot L^4}{2 \cdot E \cdot t_{eff,\delta}^3}$：
+              </p>
+              <div class="bg-white p-2.5 rounded border border-slate-200 mono text-slate-800 space-y-1.5 overflow-x-auto" id="math-step-3">
+                <!-- JS 動態填入 -->
+              </div>
+            </div>
+
+            <!-- Excel 快速公式速查區 -->
+            <div class="bg-slate-900 text-slate-200 p-3.5 rounded-lg border border-slate-700">
+              <div class="text-xs font-bold text-sky-400 mb-1.5 flex items-center justify-between">
+                <span>📊 日後在 Excel 中一秒速算之簡化公式（可直接貼入儲存格）：</span>
+                <span class="text-[11px] text-slate-400 font-normal">單位：q (MPa = kPa/1000), L (mm), t_eff (mm)</span>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mono text-[11px]">
+                <div class="bg-slate-800 p-2 rounded border border-slate-700">
+                  <span class="text-slate-400">表面應力 σ (MPa)：</span><br>
+                  <code class="text-emerald-300">= 3 * (風壓kPa / 1000) * (跨度L^2) / (應力等效厚^2)</code>
+                </div>
+                <div class="bg-slate-800 p-2 rounded border border-slate-700">
+                  <span class="text-slate-400">頂部撓度 δ (mm)：</span><br>
+                  <code class="text-sky-300">= 3 * (風壓kPa / 1000) * (跨度L^4) / (2 * 71700 * (撓度等效厚^3))</code>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // 系統全域狀態設定
+    const state = {
+      hExp: 1100,          // 外露高度 (mm)
+      hEmbed: 110,         // 埋入深度 (mm)
+      width: 1000,         // 玻璃寬度 (mm)
+      spanMode: 'total',   // 'total' (廠商基準 1210mm) 或 'exposed' (外露基準 1100mm)
+      glassThick: 12,      // 單片玻璃厚度 h (mm)
+      glassType: 'TP',     // 'TP', 'HS', 'AN'
+      interlayerType: 'SGP', // 'PVB', 'SGP', 'NONE', 'CUSTOM'
+      interlayerThick: 1.52, // 膠合膜厚度 (mm)
+      gamma: 0.955,        // 剪力傳遞係數 (0 ~ 1)
+      windKpa: 3.53,       // 環境風壓 (kPa)
+      allowStress: 50.0,   // 容許應力 (MPa)
+      E: 71700             // 玻璃楊氏模數 (MPa = N/mm^2)
+    };
+
+    // 廠商原表 4 組案例之基準資料與逆向還原精準係數
+    const vendorCases = [
+      {
+        id: 1,
+        name: '8TP+PVB+8TP',
+        h: 8,
+        interlayer: 'PVB',
+        hInt: 1.52,
+        gamma: 0.213, // 逆向擬合廠商 8+PVB+8 數據
+        vendorStress: 94.473,
+        vendorDefl: 83.99,
+        vendorPass: false
+      },
+      {
+        id: 2,
+        name: '19TP+PVB+19TP',
+        h: 19,
+        interlayer: 'PVB',
+        hInt: 1.52,
+        gamma: 0.165, // 逆向擬合廠商 19+PVB+19 數據
+        vendorStress: 17.7,
+        vendorDefl: 7.75,
+        vendorPass: true
+      },
+      {
+        id: 3,
+        name: '8TP+SGP+8TP',
+        h: 8,
+        interlayer: 'SGP',
+        hInt: 0.89,
+        gamma: 0.945, // 逆向擬合廠商 8+SGP+8 數據
+        vendorStress: 55.63,
+        vendorDefl: 27.03,
+        vendorPass: false
+      },
+      {
+        id: 4,
+        name: '12TP+SGP+12TP',
+        h: 12,
+        interlayer: 'SGP',
+        hInt: 1.52,
+        gamma: 0.955, // 逆向擬合廠商 12+SGP+12 數據
+        vendorStress: 23.77,
+        vendorDefl: 7.69,
+        vendorPass: true
+      }
+    ];
+
+    /**
+     * 核心結構力學計算函數 (ASTM E1300 & 單向懸臂梁理論)
+     */
+    function computeGlassMechanics(h, hInt, gamma, L, windKpa, E = 71700) {
+      const q = windKpa / 1000.0; // kPa 轉 MPa (N/mm^2)
+      const d = h + hInt;         // 兩片玻璃中心距 (mm)
+
+      // 1. 撓度等效厚度 t_{eff, \delta}
+      // I_eff = (1 - \Gamma) * (2 * h^3 / 12) + \Gamma * (2 * h^3 / 12 + 2 * h * (d/2)^2)
+      // 轉換為等效單片厚度 t_{eff, \delta}^3 = 12 * I_eff = 2 * h^3 + 6 * \Gamma * h * d^2
+      const tEffDeflCubed = 2 * Math.pow(h, 3) + 6 * gamma * h * Math.pow(d, 2);
+      const tEffDefl = Math.cbrt(tEffDeflCubed);
+
+      // 2. 應力等效厚度 t_{eff, \sigma}
+      // 根據 ASTM E1300: t_{eff, \sigma} = sqrt( t_{eff, \delta}^3 / (h + \Gamma * d) )
+      const tEffStress = Math.sqrt(tEffDeflCubed / (h + gamma * d));
+
+      // 3. 單位寬度最大彎矩 M (N*mm / mm)
+      const M = (q * Math.pow(L, 2)) / 2.0;
+
+      // 4. 最大表面彎曲應力 \sigma (MPa)
+      const stress = (6.0 * M) / Math.pow(tEffStress, 2);
+
+      // 5. 頂部自由端最大撓度 \delta (mm)
+      const defl = (3.0 * q * Math.pow(L, 4)) / (2.0 * E * tEffDeflCubed);
+
+      return {
+        q,
+        d,
+        M,
+        tEffDefl,
+        tEffStress,
+        stress,
+        defl
+      };
+    }
+
+    // 同步滑桿與數字輸入框
+    function syncInputs(type, val) {
+      const num = parseFloat(val);
+      if (isNaN(num)) return;
+
+      if (type === 'h-exp') {
+        state.hExp = num;
+        document.getElementById('input-h-exp').value = num;
+        document.getElementById('num-h-exp').value = num;
+        document.getElementById('val-h-exp').textContent = num;
+      } else if (type === 'h-embed') {
+        state.hEmbed = num;
+        document.getElementById('input-h-embed').value = num;
+        document.getElementById('num-h-embed').value = num;
+        document.getElementById('val-h-embed').textContent = num;
+      } else if (type === 'width') {
+        state.width = num;
+        document.getElementById('input-width').value = num;
+        document.getElementById('num-width').value = num;
+        document.getElementById('val-width').textContent = num;
+        updateWidthButtonsUI();
+      } else if (type === 'wind') {
+        state.windKpa = num;
+        document.getElementById('input-wind').value = num;
+        document.getElementById('num-wind').value = num;
+        document.getElementById('val-wind').textContent = num.toFixed(2);
+        document.getElementById('val-wind-kgf').textContent = Math.round(num * 101.97);
+      }
+      recalculate();
+    }
+
+    // 切換寬度預設按鈕 (1000mm vs 1500mm)
+    function setWidthPreset(w) {
+      syncInputs('width', w);
+    }
+
+    function updateWidthButtonsUI() {
+      const btn1000 = document.getElementById('width-btn-1000');
+      const btn1500 = document.getElementById('width-btn-1500');
+      const activeClass = "px-2 py-0.5 text-xs rounded border border-sky-500 bg-sky-50 text-sky-700 font-semibold";
+      const inactiveClass = "px-2 py-0.5 text-xs rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 font-medium";
+      btn1000.className = (state.width === 1000) ? activeClass : inactiveClass;
+      btn1500.className = (state.width === 1500) ? activeClass : inactiveClass;
+    }
+
+    // 切換跨度計算基準 (廠商總高 1210 vs 實際外露 1100)
+    function setSpanMode(mode) {
+      state.spanMode = mode;
+      const btnTotal = document.getElementById('span-mode-total');
+      const btnExposed = document.getElementById('span-mode-exposed');
+      if (mode === 'total') {
+        btnTotal.className = "px-3 py-1 text-xs font-semibold rounded-md bg-white text-sky-700 shadow-sm transition";
+        btnExposed.className = "px-3 py-1 text-xs font-medium rounded-md text-slate-600 hover:text-slate-900 transition";
+      } else {
+        btnExposed.className = "px-3 py-1 text-xs font-semibold rounded-md bg-white text-sky-700 shadow-sm transition";
+        btnTotal.className = "px-3 py-1 text-xs font-medium rounded-md text-slate-600 hover:text-slate-900 transition";
+      }
+      recalculate();
+    }
+
+    // 設定單片玻璃厚度
+    function setGlassThick(h) {
+      state.glassThick = h;
+      [6, 8, 10, 12, 15, 19].forEach(val => {
+        const btn = document.getElementById(`thick-btn-${val}`);
+        if (val === h) {
+          btn.className = "py-1.5 text-xs mono font-semibold rounded border border-sky-600 bg-sky-600 text-white shadow-sm";
+        } else {
+          btn.className = "py-1.5 text-xs mono font-semibold rounded border border-slate-200 bg-white text-slate-700 hover:bg-slate-50";
+        }
+      });
+
+      // 若是 PVB 或 SGP，自動根據厚度微調最貼近廠商軟體的預設 Gamma
+      if (state.interlayerType === 'PVB') {
+        state.gamma = (h >= 15) ? 0.165 : 0.213;
+        document.getElementById('input-gamma').value = state.gamma;
+        document.getElementById('val-gamma').textContent = state.gamma.toFixed(2);
+      } else if (state.interlayerType === 'SGP') {
+        state.gamma = (h >= 12) ? 0.955 : 0.945;
+        document.getElementById('input-gamma').value = state.gamma;
+        document.getElementById('val-gamma').textContent = state.gamma.toFixed(2);
+      }
+      recalculate();
+    }
+
+    // 切換玻璃種類
+    function onGlassTypeChange() {
+      const type = document.getElementById('select-glass-type').value;
+      state.glassType = type;
+      const allowInput = document.getElementById('input-allow-stress');
+      if (type === 'TP') allowInput.value = 50.0;
+      else if (type === 'HS') allowInput.value = 24.0;
+      else if (type === 'AN') allowInput.value = 16.5;
+      recalculate();
+    }
+
+    // 切換中間膜種類 (PVB / SGP / NONE)
+    function setInterlayerType(type) {
+      state.interlayerType = type;
+      if (type === 'PVB') {
+        state.gamma = (state.glassThick >= 15) ? 0.165 : 0.213;
+      } else if (type === 'SGP') {
+        state.gamma = (state.glassThick >= 12) ? 0.955 : 0.945;
+      } else if (type === 'NONE') {
+        state.gamma = 0.0;
+      }
+      document.getElementById('input-gamma').value = state.gamma;
+      document.getElementById('val-gamma').textContent = state.gamma.toFixed(2);
+      updateInterlayerButtonsUI();
+      recalculate();
+    }
+
+    function onCustomGamma(val) {
+      state.gamma = parseFloat(val);
+      document.getElementById('val-gamma').textContent = state.gamma.toFixed(2);
+      recalculate();
+    }
+
+    function updateInterlayerButtonsUI() {
+      ['PVB', 'SGP', 'NONE'].forEach(t => {
+        const btn = document.getElementById(`interlayer-btn-${t}`);
+        if (state.interlayerType === t) {
+          btn.className = "p-2 rounded-lg border border-sky-600 bg-sky-50/70 text-left shadow-sm transition";
+        } else {
+          btn.className = "p-2 rounded-lg border border-slate-200 bg-white text-left hover:bg-slate-50 transition";
+        }
+      });
+    }
+
+    // 載入廠商原表 4 組案例
+    function loadVendorPreset(presetId) {
+      const c = vendorCases.find(item => item.id === presetId);
+      if (!c) return;
+
+      // 重設為廠商原表幾何與風壓條件
+      syncInputs('h-exp', 1100);
+      syncInputs('h-embed', 110);
+      syncInputs('wind', 3.53);
+      setSpanMode('total');
+
+      document.getElementById('select-interlayer-thick').value = c.hInt.toString();
+      state.interlayerType = c.interlayer;
+      updateInterlayerButtonsUI();
+      setGlassThick(c.h);
+
+      state.gamma = c.gamma;
+      document.getElementById('input-gamma').value = c.gamma;
+      document.getElementById('val-gamma').textContent = c.gamma.toFixed(2);
+
+      // 更新頂部預設按鈕高亮
+      [1, 2, 3, 4].forEach(id => {
+        const btn = document.getElementById(`preset-btn-${id}`);
+        if (id === presetId) {
+          btn.className = "px-2.5 py-1.5 text-xs font-medium rounded bg-sky-600 hover:bg-sky-500 text-white border border-sky-400 shadow-sm transition";
+        } else {
+          btn.className = "px-2.5 py-1.5 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition";
+        }
+      });
+
+      recalculate();
+    }
+
+    // 主計算與畫面更新函數
+    function recalculate() {
+      const lTotal = state.hExp + state.hEmbed;
+      document.getElementById('val-l-total').textContent = lTotal;
+      const embedRatio = (state.hExp / state.hEmbed).toFixed(1);
+      document.getElementById('val-embed-ratio').textContent = `1 : ${embedRatio}`;
+
+      // 決定有效計算跨度 L
+      const L = (state.spanMode === 'total') ? lTotal : state.hExp;
+      state.interlayerThick = parseFloat(document.getElementById('select-interlayer-thick').value);
+      state.allowStress = parseFloat(document.getElementById('input-allow-stress').value) || 50.0;
+
+      // 決定容許撓度上限
+      const deflLimitMode = document.getElementById('select-defl-limit').value;
+      let allowDefl = 20.17;
+      if (deflLimitMode === 'L_60') allowDefl = L / 60.0;
+      else if (deflLimitMode === 'ABS_15') allowDefl = 15.0;
+      else if (deflLimitMode === 'L_100') allowDefl = L / 100.0;
+      else if (deflLimitMode === 'ABS_25') allowDefl = 25.0;
+
+      // 更新組合名稱標籤
+      const interlayerName = state.interlayerType === 'NONE' ? 'PVB(無剪力)' : state.interlayerType;
+      const comboText = `${state.glassThick}${state.glassType} + ${interlayerName} + ${state.glassThick}${state.glassType}`;
+      document.getElementById('current-combo-badge').textContent = comboText;
+
+      // 執行核心計算
+      const res = computeGlassMechanics(
+        state.glassThick,
+        state.interlayerThick,
+        state.gamma,
+        L,
+        state.windKpa,
+        state.E
+      );
+
+      const stressPass = res.stress <= state.allowStress;
+      const deflPass = res.defl <= allowDefl;
+      const allPass = stressPass && deflPass;
+
+      // 1. 更新應力卡片
+      document.getElementById('res-stress').textContent = res.stress.toFixed(2);
+      document.getElementById('lbl-allow-stress').textContent = state.allowStress.toFixed(1);
+      const stressRatio = ((res.stress / state.allowStress) * 100).toFixed(1);
+      document.getElementById('res-stress-ratio').textContent = `負荷比 ${stressRatio}%`;
+
+      const cardStress = document.getElementById('card-stress');
+      const badgeStress = document.getElementById('badge-stress');
+      if (stressPass) {
+        cardStress.className = "bg-white rounded-xl p-4 border-2 border-emerald-500 shadow-sm relative overflow-hidden";
+        badgeStress.className = "px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-100 text-emerald-800 mono";
+        badgeStress.textContent = "OK 合格";
+        document.getElementById('res-stress-ratio').className = "mono font-semibold text-emerald-600";
+      } else {
+        cardStress.className = "bg-white rounded-xl p-4 border-2 border-rose-500 shadow-sm relative overflow-hidden";
+        badgeStress.className = "px-2 py-0.5 text-[11px] font-bold rounded bg-rose-100 text-rose-800 mono";
+        badgeStress.textContent = "NG 超標";
+        document.getElementById('res-stress-ratio').className = "mono font-semibold text-rose-600";
+      }
+
+      // 2. 更新撓度卡片
+      document.getElementById('res-defl').textContent = res.defl.toFixed(2);
+      document.getElementById('lbl-allow-defl').textContent = allowDefl.toFixed(1);
+      const spanRatio = Math.round(L / Math.max(res.defl, 0.1));
+      document.getElementById('res-defl-span').textContent = `L / ${spanRatio}`;
+
+      const cardDefl = document.getElementById('card-defl');
+      const badgeDefl = document.getElementById('badge-defl');
+      if (deflPass) {
+        cardDefl.className = "bg-white rounded-xl p-4 border-2 border-emerald-500 shadow-sm relative overflow-hidden";
+        badgeDefl.className = "px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-100 text-emerald-800 mono";
+        badgeDefl.textContent = "OK 合格";
+        document.getElementById('res-defl-span').className = "mono font-semibold text-sky-700";
+      } else {
+        cardDefl.className = "bg-white rounded-xl p-4 border-2 border-rose-500 shadow-sm relative overflow-hidden";
+        badgeDefl.className = "px-2 py-0.5 text-[11px] font-bold rounded bg-rose-100 text-rose-800 mono";
+        badgeDefl.textContent = "NG 過軟";
+        document.getElementById('res-defl-span').className = "mono font-semibold text-rose-600";
+      }
+
+      // 3. 更新等效厚度卡片
+      document.getElementById('res-teff-s').textContent = res.tEffStress.toFixed(2);
+      document.getElementById('res-teff-d').textContent = res.tEffDefl.toFixed(2);
+      const totalGeomThick = 2 * state.glassThick + state.interlayerThick;
+      document.getElementById('res-total-thick').textContent = `${totalGeomThick.toFixed(2)} mm`;
+
+      // 4. 更新單片重量与底座彎矩卡片 (反映 1000mm vs 1500mm 差異)
+      // 玻璃比重約 2.5 g/cm^3 -> 每 m^2 每 mm 厚重 2.5 kg；加上中間膜比重約 1.0
+      const areaM2 = (lTotal / 1000.0) * (state.width / 1000.0);
+      const weightKg = areaM2 * (2 * state.glassThick * 2.5 + state.interlayerThick * 1.1);
+      const unitMomentKnm = res.M / 1000.0; // N*mm/mm = N*m/m -> 除以 1000 得 kN*m/m
+      const totalMomentKnm = unitMomentKnm * (state.width / 1000.0);
+
+      document.getElementById('badge-width-tag').textContent = `B=${state.width}mm`;
+      document.getElementById('res-weight').textContent = weightKg.toFixed(1);
+      document.getElementById('res-total-moment').textContent = totalMomentKnm.toFixed(2);
+      document.getElementById('res-unit-moment').textContent = `${unitMomentKnm.toFixed(2)} kN·m/m`;
+
+      // 更新施工檢核區
+      document.getElementById('chk-width-lbl').textContent = state.width;
+      document.getElementById('chk-weight').textContent = weightKg.toFixed(1);
+      document.getElementById('chk-weight-note').textContent = weightKg > 85 ? "⚠️ 超過 85kg，需使用真空吸盤吊具" : "✅ 2名工人可徒手搬運微調";
+      const anchorCount = Math.max(2, Math.ceil(state.width / 250));
+      document.getElementById('chk-anchors').textContent = anchorCount;
+      // U槽內埋深力偶估算 (F ≈ M / (0.75 * h_embed))
+      const slotForce = (unitMomentKnm / (0.75 * (state.hEmbed / 1000.0))).toFixed(1);
+      document.getElementById('chk-slot-force').textContent = slotForce;
+
+      // 5. 更新 SVG 動態剖面圖
+      updateSectionSVG(res.defl, allPass, L);
+
+      // 6. 更新廠商原表 4 組同步對照表
+      updateComparisonTable(L, allowDefl);
+
+      // 7. 更新完整公式逐步推導區
+      updateMathBreakdown(res, L, allowDefl, allPass);
+    }
+
+    // 更新 SVG 視覺化變形圖
+    function updateSectionSVG(defl, allPass, L) {
+      document.getElementById('svg-wind-label').textContent = `q = ${state.windKpa.toFixed(2)} kPa`;
+      document.getElementById('svg-hexp-label').textContent = `${(state.hExp / 10).toFixed(0)} cm`;
+      document.getElementById('svg-hembed-label').textContent = `${(state.hEmbed / 10).toFixed(0)} cm`;
+      document.getElementById('svg-span-val').textContent = `${L} mm`;
+
+      const pill = document.getElementById('svg-status-pill');
+      if (allPass) {
+        pill.className = "px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-bold";
+        pill.textContent = "OK 合格";
+      } else {
+        pill.className = "px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-400/40 font-bold";
+        pill.textContent = "NG 不合格";
+      }
+
+      // 計算頂部彎曲偏移像素 (將 0~90mm 映射到 4~65px 視覺位移)
+      const shiftPx = Math.min(68, Math.max(4, defl * 0.85));
+      const topX = 130 + shiftPx;
+      const ctrlX = 130 + shiftPx * 0.25;
+
+      const curve = document.getElementById('svg-deflection-curve');
+      const dot = document.getElementById('svg-deflection-dot');
+      const txt = document.getElementById('svg-deflection-text');
+
+      curve.setAttribute('d', `M 130 230 Q ${ctrlX.toFixed(1)} 130 ${topX.toFixed(1)} 30`);
+      dot.setAttribute('cx', topX.toFixed(1));
+      txt.setAttribute('x', Math.min(185, topX + 6).toFixed(1));
+      txt.textContent = `δ = ${defl.toFixed(2)}mm`;
+
+      const strokeColor = allPass ? '#34d399' : '#fb7185';
+      curve.setAttribute('stroke', strokeColor);
+      dot.setAttribute('fill', strokeColor);
+      txt.setAttribute('fill', strokeColor);
+    }
+
+    // 更新廠商原表 4 組配置對照表
+    function updateComparisonTable(L, allowDefl) {
+      const tbody = document.getElementById('comparison-tbody');
+      let html = '';
+
+      vendorCases.forEach(c => {
+        const r = computeGlassMechanics(c.h, c.hInt, c.gamma, L, state.windKpa, state.E);
+        const pass = (r.stress <= state.allowStress) && (r.defl <= allowDefl);
+        const isCurrent = (state.glassThick === c.h && state.interlayerType === c.interlayer);
+
+        const rowBg = isCurrent ? 'bg-sky-50/90 font-semibold' : 'hover:bg-slate-50';
+        const stressColor = r.stress <= state.allowStress ? 'text-slate-800' : 'text-rose-600 font-bold';
+        const deflColor = r.defl <= allowDefl ? 'text-slate-800' : 'text-rose-600 font-bold';
+        const badge = pass
+          ? '<span class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800">OK</span>'
+          : '<span class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-rose-100 text-rose-700">NG</span>';
+
+        html += `
+          <tr onclick="loadVendorPreset(${c.id})" class="${rowBg} cursor-pointer transition">
+            <td class="py-2 px-2.5">
+              <div class="flex items-center gap-1.5">
+                ${isCurrent ? '<span class="w-2 h-2 rounded-full bg-sky-600"></span>' : ''}
+                <span class="font-bold text-slate-800">${c.name}</span>
+              </div>
+              <div class="text-[10px] text-slate-400">原表: ${c.vendorStress} MPa / ${c.vendorDefl} mm</div>
+            </td>
+            <td class="py-2 px-2 text-right ${stressColor}">
+              ${r.stress.toFixed(2)}
+            </td>
+            <td class="py-2 px-2 text-right ${deflColor}">
+              ${r.defl.toFixed(2)}
+            </td>
+            <td class="py-2 px-2 text-center">
+              ${badge}
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    // 更新底部完整數學推導過程
+    function updateMathBreakdown(res, L, allowDefl, allPass) {
+      const h = state.glassThick;
+      const hInt = state.interlayerThick;
+      const gamma = state.gamma;
+
+      // Step 1
+      document.getElementById('math-step-1').innerHTML = `
+        <div>• 設計風壓轉換：$q = ${state.windKpa.toFixed(2)}\\text{ kPa} = ${res.q.toFixed(5)}\\text{ MPa (N/mm}^2\\text{)}$</div>
+        <div>• 懸臂計算跨度：$L = ${L}\\text{ mm}$ （${state.spanMode === 'total' ? '採用廠商玻璃總高度基準 1210mm' : '採用實際外露懸臂高度基準'}）</div>
+        <div class="text-sky-800 font-bold mt-1">➜ 單位寬度最大彎矩 $M_{max} = \\frac{q \\cdot L^2}{2} = \\frac{${res.q.toFixed(5)} \\times ${L}^2}{2} = ${res.M.toFixed(2)}\\text{ N}\\cdot\\text{mm/mm}$</div>
+      `;
+
+      // Step 2
+      document.getElementById('math-step-2').innerHTML = `
+        <div>• 單片玻璃厚度 $h = ${h}\\text{ mm}$，中間膜厚度 $h_{int} = ${hInt}\\text{ mm}$，兩片中心距 $d = h + h_{int} = ${res.d.toFixed(2)}\\text{ mm}$</div>
+        <div>• 中間膜剪力傳遞係數 $\\Gamma = ${gamma.toFixed(3)}$ （${state.interlayerType} 模式）</div>
+        <div class="text-sky-800 font-bold">➜ 撓度等效厚度 $t_{eff,\\delta} = \\left( 2h^3 + 6 \\cdot \\Gamma \\cdot h \\cdot d^2 \\right)^{1/3} = \\left( 2\\times${h}^3 + 6\\times${gamma.toFixed(3)}\\times${h}\\times${res.d.toFixed(2)}^2 \\right)^{1/3} = ${res.tEffDefl.toFixed(2)}\\text{ mm}$</div>
+        <div class="text-indigo-800 font-bold">➜ 應力等效厚度 $t_{eff,\\sigma} = \\sqrt{ \\frac{t_{eff,\\delta}^3}{h + \\Gamma \\cdot d} } = \\sqrt{ \\frac{${Math.pow(res.tEffDefl, 3).toFixed(1)}}{${h} + ${gamma.toFixed(3)} \\times ${res.d.toFixed(2)}} } = ${res.tEffStress.toFixed(2)}\\text{ mm}$</div>
+      `;
+
+      // Step 3
+      const statusText = allPass ? '✅ 結構安全合格 (OK)' : '❌ 超出容許標準 (NG)';
+      document.getElementById('math-step-3').innerHTML = `
+        <div class="text-slate-900 font-bold">① 表面彎曲應力 $\\sigma = \\frac{6 \\cdot M_{max}}{t_{eff,\\sigma}^2} = \\frac{6 \\times ${res.M.toFixed(2)}}{${res.tEffStress.toFixed(2)}^2} = \\mathbf{${res.stress.toFixed(2)}\\text{ MPa}}$ （容許值 $\\le ${state.allowStress.toFixed(1)}\\text{ MPa}$）</div>
+        <div class="text-slate-900 font-bold">② 頂部自由端撓度 $\\delta = \\frac{3 \\cdot q \\cdot L^4}{2 \\cdot E \\cdot t_{eff,\\delta}^3} = \\frac{3 \\times ${res.q.toFixed(5)} \\times ${L}^4}{2 \\times ${state.E} \\times ${res.tEffDefl.toFixed(2)}^3} = \\mathbf{${res.defl.toFixed(2)}\\text{ mm}}$ （容許值 $\\le ${allowDefl.toFixed(1)}\\text{ mm}$）</div>
+        <div class="mt-1 pt-1 border-t border-slate-200 font-bold ${allPass ? 'text-emerald-700' : 'text-rose-600'}">綜合判定結果：${statusText}</div>
+      `;
+    }
+
+    // 複製結構計算書純文字摘要
+    function copyCalculationReport() {
+      const lTotal = state.hExp + state.hEmbed;
+      const L = (state.spanMode === 'total') ? lTotal : state.hExp;
+      const res = computeGlassMechanics(state.glassThick, state.interlayerThick, state.gamma, L, state.windKpa, state.E);
+
+      const report = [
+        `【無框玻璃扶手結構初評計算書】`,
+        `1. 幾何尺寸：外露高 ${state.hExp}mm + 埋入深 ${state.hEmbed}mm (總高 ${lTotal}mm)，寬度 B=${state.width}mm`,
+        `2. 固定方式：底部連續不鏽鋼U槽 (單短邊懸臂支撐，計算跨度 L=${L}mm)`,
+        `3. 玻璃配置：${state.glassThick}${state.glassType} + ${state.interlayerType}(${state.interlayerThick}mm, Γ=${state.gamma.toFixed(2)}) + ${state.glassThick}${state.glassType}`,
+        `4. 設計風壓：q = ${state.windKpa.toFixed(2)} kPa (${res.q.toFixed(5)} MPa)`,
+        `5. 等效厚度：應力等效厚 t_eff,σ = ${res.tEffStress.toFixed(2)} mm / 撓度等效厚 t_eff,δ = ${res.tEffDefl.toFixed(2)} mm`,
+        `6. 計算結果：`,
+        `   - 單位寬度最大彎矩 M = ${res.M.toFixed(2)} N·mm/mm (${(res.M/1000).toFixed(2)} kN·m/m)`,
+        `   - 表面最大彎曲應力 σ = ${res.stress.toFixed(2)} MPa (容許值 <= ${state.allowStress.toFixed(1)} MPa)`,
+        `   - 自由端最大撓度 δ = ${res.defl.toFixed(2)} mm (跨度比 L/${Math.round(L/res.defl)})`
+      ].join('\n');
+
+      const textarea = document.createElement('textarea');
+      textarea.value = report;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+
+      const btnTxt = document.getElementById('copy-btn-text');
+      btnTxt.textContent = "已複製至剪貼簿！";
+      setTimeout(() => {
+        btnTxt.textContent = "複製計算書文字";
+      }, 2000);
+    }
+
+    // 頁面載入時預設載入第 4 組推薦配置 (12TP+SGP+12TP)
+    window.onload = function() {
+      loadVendorPreset(4);
+    };
+  </script>
+</body>
+</html>
