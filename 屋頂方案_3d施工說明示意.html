@@ -182,6 +182,7 @@ const I={
   anchor:{tag:'錨栓',title:'錨栓 2-M16（F1554 Gr36）',rows:[['配置','每支承2-M16，埋深≥25；中間每45cm一組'],['設計考量','薄牆邊距10 cm，須與牆筋搭接並加U型補強筋#3@15；推力與上拔皆經此傳入牆']]},
   sb:{tag:'主斜樑',title:'SB-1～10 主斜樑 H200x100x5.5x8',rows:[['跨距','730 c/c，坡度1:2.27，@135'],['北端','SB-2～6 止於C線環樑（上方為入口屋頂）'],['屋脊','平齊端板PL16＋4-M16 F10T；無脊樑'],['檢核','DCR≈0.26；SB-4含ER-R反力約0.5']]},
   clad:{tag:'包覆',title:'主斜樑花旗松包覆 170x240',rows:[['構造','側板t35／上下板t20，內側30分鐘防火漆'],['說明','包覆上緣＝橫樑底＝金屬屋頂量體底']]},
+  fascia:{tag:'包覆',title:'簷口花旗松封邊板 t30',rows:[['位置','南北斜邊簷口（北側入口段除外）'],['說明','遮蔽主斜樑端部，完成後看不到鋼構；鋼樑端部退縮於包覆內']]},
   rclad:{tag:'包覆',title:'環樑花旗松包覆（完成後不見鋼構）',rows:[['範圍','RB-R、RB-W、RB-E、HB-1 三面包覆（底面貼牆者除外）'],['構造','花旗松 t20，鋼構面30分鐘防火漆'],['東面','落地窗上緣直接頂到 RB-E 包覆底']]},
   y:{tag:'造型',title:'Y型木構造型（純裝飾）',rows:[['形式','位於屋面內、相鄰主斜樑之間：每跨中線一支幹自屋脊下至分叉線（距屋脊150），再分兩枝斜向兩側主斜樑，於環樑線會合；只有Y形，無縱向木樑（依點構2025/03/06木構屋頂平面與設計師彩圖）'],['斷面','花旗松 130x120，頂面切齊主斜樑包覆上緣'],['設計考量','不分擔結構：以螺栓掛接於主斜樑包覆與橫樑下，不承受屋面載重，避免改變已檢核的受力；靜載已含Y形造型（約100 kgf/m²內）']]},
   glw:{tag:'玻璃',title:'西面三角窗',rows:[['位置','軸1，RB-W 上方至主斜樑下緣'],['說明','與東面三角窗對稱']]},
@@ -244,9 +245,10 @@ box('clad',ax(10)-12,ax(10)+12,Z_RB-22,Z_RB+2,zA-10,zC+10,I.rclad,['clad']);
 // 主斜樑＋包覆
 for(let i=1;i<=10;i++){
   const x=ax(i), kk=i===4?['sb','sb4']:['sb'];
-  member('sb',[x,zt(0),zB],[x,zt(XSB),zB+XSB],10,20,I.sb,kk);
+  const XS=XSB-8;   // 鋼樑端退縮8，藏於包覆內
+  member('sb',[x,zt(0),zB],[x,zt(XS),zB+XS],10,20,I.sb,kk);
   const dn=(i>=2&&i<=6)?SBN:XSB;
-  member('sb',[x,zt(0),zB],[x,zt(dn),zB-dn],10,20,I.sb,kk);
+  member('sb',[x,zt(0),zB],[x,zt(i>=2&&i<=6?dn:XS),zB-(i>=2&&i<=6?dn:XS)],10,20,I.sb,kk);
   member('clad',[x,zt(0)+CLAD,zB],[x,zt(XSB)+CLAD,zB+XSB],17,24,I.clad,['clad']);
   member('clad',[x,zt(0)+CLAD,zB],[x,zt(dn)+CLAD,zB-dn],17,24,I.clad,['clad']);
 }
@@ -258,6 +260,10 @@ for(let i=1;i<10;i++){ const x0=ax(i), x1=ax(i+1), xm=(x0+x1)/2;
     member('ywood',[xm,ytop(0),zB],[xm,ytop(YF),zf_],13,12,I.y,['y']);
     member('ywood',[xm,ytop(YF),zf_],[x0+8.5,ytop(YE),ze],13,12,I.y,['y']);
     member('ywood',[xm,ytop(YF),zf_],[x1-8.5,ytop(YE),ze],13,12,I.y,['y']); }); }
+// 簷口花旗松封邊板（t3，遮蔽主斜樑端部）
+{ const dF=422, yt=zf(dF)-RV, yb=zt(XSB)+CLAD-26;
+  box('clad',xa,xb,yb,yt,zB+dF+1.5,zB+dF-1.5,I.fascia,['clad']);
+  [[xa,xEW],[xEE,xb]].forEach(r=>box('clad',r[0],r[1],yb,yt,zB-dF+1.5,zB-dF-1.5,I.fascia,['clad'])); }
 // 主屋頂橫樑（北坡於谷線內截斷）
 PURL.forEach(k=>{[-1,1].forEach(s=>{
   const z=zB-s*k, y=zt(k)+CLAD+PC; let segs=[[xa,xb]];
@@ -275,7 +281,6 @@ ER_D.forEach(dd=>{ const z=zB-dd, ext=Math.min(dd-95,330), full=ext>=330;
   [-1,1].forEach(s=>member('ent',[X4,be(0)+D15,z],[X4+s*ext,be(ext)+D15,z],7.5,15,full?I.er:I.jr,[full?'er':'jr'])); });
 [xEW,xEE].forEach(xe=>member('ent',[X4,be(0)+D15,yV],[xe,be(xe-X4)+D15,eC],7.5,15,I.vr,['vr']));
 [2,3,5,6].forEach(i=>{ const x=ax(i), dx=Math.abs(x-X4); tiltX('ent',x,be(dx),yV-dx,yEN,15,5,x<X4?TH:-TH,I.ep,['ep']); });
-[[xEW,1],[xEE,-1]].forEach(([xe,sg])=>tiltX('ent',xe+sg*3,be(330),eC,yEN-0.5,15,5,sg>0?TH:-TH,I.ep,['ep']));
 // 金屬屋頂量體 20 cm
 const rf=(x,z)=>zf(z-zB), ef=(x,z)=>fe(x-X4);
 const R_=['roofv'];
